@@ -1,0 +1,71 @@
+'use strict';
+const $=id=>document.getElementById(id),form=$('settings'),broadcast=$('broadcastSettings');
+let initialized=false,latest=null,statsLoaded=false;
+const appearanceChanges=new Map(),teamKey=name=>name.trim().replace(/\s+/g,' ').toLowerCase();
+const editAppearance=n=>{const key=teamKey(form.elements['team'+n].value);if(!appearanceChanges.has(key))appearanceChanges.set(key,{});return appearanceChanges.get(key);};
+function appearanceLabels(){for(const n of [1,2]){const name=form.elements['team'+n].value,key=teamKey(name),profile=latest?.team_appearance?.find(p=>teamKey(p.name)===key),draft=appearanceChanges.get(key);$('color'+n+'Label').textContent=(name||'Team')+' colour';$('logo'+n+'Label').textContent=(name||'Team')+' logo · PNG/JPEG';if(draft?.color)form.elements['color'+n].value=draft.color;else if(profile)form.elements['color'+n].value=profile.color;}}
+for(const n of [1,2]){form.elements['team'+n].addEventListener('input',appearanceLabels);form.elements['color'+n].addEventListener('input',event=>editAppearance(n).color=event.target.value);}
+function outputAddress(){const url=$('overlayAddress').value;if(!url)return;$('overlayUrl').textContent=url;$('broadcastLink').href=url.replace(/\/overlay$/,'/broadcast');}
+$('overlayAddress').onchange=outputAddress;
+$('copyOverlay').onclick=async()=>{try{await navigator.clipboard.writeText($('overlayUrl').textContent);$('copyOverlay').textContent='Copied';setTimeout(()=>$('copyOverlay').textContent='Copy overlay URL',1500);}catch(e){error('Select and copy the overlay URL manually.');}};
+async function networkOutput(){try{const response=await fetch('/api/server-info',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!response.ok)throw Error('Could not find Studio addresses');const info=await response.json();const urls=info.overlay_urls||[];if(!urls.length)throw Error('No Studio network address found');$('overlayAddress').replaceChildren(...urls.map((url,n)=>Object.assign(document.createElement('option'),{value:url,textContent:new URL(url).host+(n===0?' · preferred LAN':' · alternative adapter')})));outputAddress();$('overlayCertificate').hidden=!info.certificate_url;if(!info.secure_context)$('overlayNetworkHint').textContent='HTTPS is not configured. Run Studio certificate setup before using secure overlay links.';}catch(e){$('overlayUrl').textContent='Network links unavailable · '+e.message;}}
+networkOutput();
+function error(message){$('error').textContent=message;}
+function autoFields(){form.querySelectorAll('[data-auto]').forEach(el=>el.disabled=form.elements.source.value==='bluetooth');}
+form.elements.source.addEventListener('change',autoFields);
+async function post(url,data){const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),signal:AbortSignal.timeout(5000)});const result=await response.json();if(!response.ok)throw Error(typeof result.detail==='string'?result.detail:result.error||'Request failed');return result;}
+for(const n of [1,2]){
+  $('upload'+n).addEventListener('change',async event=>{const file=event.target.files[0];if(!file)return;const draft=editAppearance(n);try{if(file.size>1000000||!['image/png','image/jpeg'].includes(file.type))throw Error('Choose a PNG or JPEG smaller than 1 MB');draft.logo=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file);});$('saveStatus').textContent='Logo selected · press Save';}catch(e){error(e.message);}});
+  document.querySelector('[data-clear="'+n+'"]').onclick=()=>{editAppearance(n).logo='';$('upload'+n).value='';$('saveStatus').textContent='Logo cleared · press Save';};
+}
+form.onsubmit=async event=>{event.preventDefault();if(!latest)return;const data={};for(const [key,value] of new FormData(form))if(key in latest.score&&!key.startsWith('color'))data[key]=value;data.visible=form.elements.visible.checked;for(const n of [1,2]){const draft=appearanceChanges.get(teamKey(form.elements['team'+n].value));for(const field of ['color','logo'])if(draft&&field in draft)data[field+n]=draft[field];}try{await post('/api/scoreboard/settings',data);appearanceChanges.clear();$('saveStatus').textContent='Saved';error('');}catch(e){error(e.message);}};
+
+function addMessage(message={type:'custom'}){
+  const box=document.createElement('div');box.className='message-row';
+  box.innerHTML='<label>Type<select data-field="type"><option value="custom">Additional text</option><option value="head_to_head">Head to head</option><option value="attendance">Attendance</option></select></label><label data-for="custom">Text<input data-field="text" maxlength="160"></label><label data-for="head_to_head">Team 1<input data-field="team1" maxlength="160"></label><label data-for="head_to_head">Wins<input data-field="wins1" inputmode="numeric"></label><label data-for="head_to_head">Team 2<input data-field="team2" maxlength="160"></label><label data-for="head_to_head">Wins<input data-field="wins2" inputmode="numeric"></label><label data-for="attendance">Number<input data-field="attendance" inputmode="numeric"></label><button type="button" class="remove-message" aria-label="Remove information message">Remove</button>';
+  for(const el of box.querySelectorAll('[data-field]'))el.value=message[el.dataset.field]||'';
+  const update=()=>box.querySelectorAll('[data-for]').forEach(el=>el.hidden=el.dataset.for!==box.querySelector('select').value);
+  box.querySelector('select').addEventListener('change',update);box.querySelector('button').onclick=()=>box.remove();update();$('messages').append(box);
+}
+$('addMessage').onclick=()=>addMessage();
+broadcast.onsubmit=async event=>{event.preventDefault();const data={};for(const [key,value] of new FormData(broadcast)){data[key]=['total_overs','wickets_limit','interval_seconds','graphic_seconds'].includes(key)?Number(value):key==='target'?(value===''?null:Number(value)):value;}
+  for(const key of ['auto_drinks','auto_innings_break','auto_summary'])data[key]=broadcast.elements[key].checked;
+  data.messages=[...$('messages').children].map(box=>{const type=box.querySelector('select').value;const keys=type==='custom'?['text']:type==='attendance'?['attendance']:['team1','team2','wins1','wins2'];return Object.fromEntries([['type',type],...keys.map(key=>[key,box.querySelector('[data-field="'+key+'"]').value])]);});
+  try{await post('/api/scoreboard/broadcast/settings',data);await post('/api/scoreboard/settings',{banner:$('mainBanner').value});$('broadcastSave').textContent='Saved';error('');}catch(e){error(e.message);}
+};
+async function action(data){try{await post('/api/scoreboard/broadcast/action',data);if(data.action==='start_chase'){initialized=false;statsLoaded=false;}error('');}catch(e){error(e.message);}}
+document.querySelectorAll('[data-graphic]').forEach(button=>button.onclick=()=>action({action:'show',kind:button.dataset.graphic,innings:Number($('graphicInnings').value)}));
+document.querySelectorAll('[data-action]').forEach(button=>button.onclick=()=>action({action:button.dataset.action}));
+$('hideGraphic').onclick=()=>action({action:'hide'});
+$('reset').onclick=async()=>{if(!confirm('Start a new match? This clears both innings, recorded stats and score fields. Team colours, logos and message settings remain.'))return;try{await post('/api/scoreboard/reset',{});initialized=false;statsLoaded=false;$('battingRows').replaceChildren();$('bowlingRows').replaceChildren();error('');}catch(e){error(e.message);}};
+$('download').onclick=()=>{if(!latest)return;const blob=new Blob([JSON.stringify({status:latest.status,packet_count:latest.packet_count,logs:latest.logs},null,2)],{type:'application/json'});const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='scoreboard-connection-log.json';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);};
+
+function playerRow(kind,row={}){const tr=document.createElement('tr');for(const key of kind==='batting'?['name','dismissal','runs','balls']:['name','figures','overs']){const td=document.createElement('td'),input=document.createElement('input');input.dataset.field=key;input.value=row[key]??'';input.maxLength=160;input.setAttribute('aria-label',kind+' '+key);if(['runs','balls'].includes(key)){input.type='number';input.min=0;input.max=9999;}td.append(input);tr.append(td);}$(kind==='batting'?'battingRows':'bowlingRows').append(tr);}
+$('addBatter').onclick=()=>playerRow('batting');$('addBowler').onclick=()=>playerRow('bowling');
+function wicketOptions(value=$('statLastWicket').value){const select=$('statLastWicket');select.replaceChildren(Object.assign(document.createElement('option'),{value:'',textContent:'Automatic / last confirmed'}));$('battingRows').querySelectorAll('[data-field="name"]').forEach(input=>{if(input.value){const option=document.createElement('option');option.value=input.value;option.textContent=input.value;select.append(option);}});select.value=[...select.options].some(option=>option.value===value)?value:'';}
+$('battingRows').addEventListener('input',()=>wicketOptions());
+function loadStats(){const innings=latest?.graphics.innings[Number($('statsInnings').value)];if(!innings)return;for(const kind of ['batting','bowling']){const rows=innings[kind==='batting'?'batters':'bowlers'];$(kind==='batting'?'battingRows':'bowlingRows').replaceChildren();for(const row of rows)playerRow(kind,row);if(!rows.length)playerRow(kind);}
+  $('statExtras').value=innings.extras_manual??'';$('statFours').value=innings.fours_manual??'';$('statSixes').value=innings.sixes_manual??'';
+  $('statOvers').value=(innings.manual_over_runs||[]).map(v=>v===null?'?':v).join(', ');
+  wicketOptions(innings.last_wicket?.name||'');
+  $('statsCoverage').textContent=innings.team+' · '+innings.wickets+'–'+innings.runs+' ('+innings.overs+') · '+innings.fours+' fours, '+innings.sixes+' sixes '+(innings.boundaries_complete?'':'recorded so far')+' · Missing overs and details can be entered below.';
+  $('statsSave').textContent='Ready';statsLoaded=true;
+}
+$('loadStats').onclick=loadStats;$('statsInnings').onchange=loadStats;
+$('statistics').onsubmit=async event=>{event.preventDefault();if(!$('statsInnings').value)return error('Receive or enter a score first');const data={innings:Number($('statsInnings').value)};
+  for(const kind of ['batting','bowling'])data[kind==='batting'?'batters':'bowlers']=[...$(kind==='batting'?'battingRows':'bowlingRows').children].map(row=>Object.fromEntries([...row.querySelectorAll('input')].map(input=>[input.dataset.field,['runs','balls'].includes(input.dataset.field)?input.value===''?null:Number(input.value):input.value])));
+  for(const [field,id] of [['extras','statExtras'],['fours','statFours'],['sixes','statSixes']])data[field]=$(id).value===''?null:Number($(id).value);
+  data.last_wicket_name=$('statLastWicket').value;
+  if($('statOvers').value.trim())data.over_runs=$('statOvers').value.split(',').map(v=>v.trim()==='?'||v.trim()===''?null:Number(v));else data.over_runs=[];
+  try{await post('/api/scoreboard/broadcast/stats',data);$('statsSave').textContent='Saved';error('');}catch(e){error(e.message);}
+};
+function inningsOptions(graphics){for(const id of ['graphicInnings','statsInnings']){const select=$(id),value=select.value;const keys=graphics.innings.map((i,n)=>n+':'+i.team).join('|');if(select.dataset.keys===keys)continue;select.dataset.keys=keys;select.replaceChildren(...graphics.innings.map((i,n)=>{const option=document.createElement('option');option.value=String(n);option.textContent=(n+1)+'. '+i.team;return option;}));select.value=value!==''&&graphics.innings[Number(value)]?value:String(Math.max(0,graphics.innings.length-1));}if(!statsLoaded&&graphics.innings.length)loadStats();}
+async function poll(){try{const response=await fetch('/api/scoreboard/state',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!response.ok)throw Error('Server response '+response.status);latest=await response.json();$('btStatus').textContent=latest.status;$('packetCount').textContent=latest.packet_count+' packets';$('lastUpdate').textContent=latest.last_score===null?'No recognised live score received':'Score update '+Math.floor(latest.server_time-latest.last_score)+'s ago';
+  if(!initialized){for(const [key,value] of Object.entries(latest.score)){const el=form.elements.namedItem(key);if(el)el.type==='checkbox'?el.checked=value:el.value=value;}$('mainBanner').value=latest.score.banner;for(const [key,value] of Object.entries(latest.graphics.config)){const el=broadcast.elements.namedItem(key);if(el)el.type==='checkbox'?el.checked=value:el.value=value??'';}$('messages').replaceChildren();latest.graphics.config.messages.forEach(addMessage);initialized=true;autoFields();}
+  if(form.elements.source.value==='bluetooth')form.querySelectorAll('[data-auto]').forEach(el=>el.value=latest.score[el.name]);
+  appearanceLabels();
+  inningsOptions(latest.graphics);const g=latest.graphics;$('phaseStatus').textContent=g.phase==='complete'?'Full time'+(g.summary_due_in!==null?' · Summary in '+g.summary_due_in+'s':''):g.phase==='innings_break'?'Innings break':'Innings '+Math.max(1,g.innings.length)+' · Live';$('stripStatus').textContent=g.active?'ON AIR · '+g.active.kind.replaceAll('_',' '):g.strip.text;
+  $('logs').textContent=latest.logs.slice(-20).reverse().map(p=>new Date(p.at*1000).toLocaleTimeString()+' '+p.text+'\n'+(Object.keys(p.fields).length?'Mapped: '+JSON.stringify(p.fields):'Unmapped · '+p.hex)).join('\n\n')||'Waiting for packets…';
+  if(latest.error)error(latest.error);
+}catch(e){$('btStatus').textContent='Server unavailable: '+e.message;}finally{setTimeout(poll,1000);}}
+poll();

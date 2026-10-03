@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Backyard Scoreboard · Broadcast desk</title><link rel="stylesheet" href="/style.css?v=0.3.2"><link rel="stylesheet" href="/scoreboard-assets/desk.css?v=0.3.2"></head>
+<body class="control">
+  <header><div><p class="eyebrow">BROADCAST DESK</p><h1>Backyard <em>Scoreboard</em></h1><p>Live scores, rotating information and match graphics</p></div><a class="button" href="/overlay" target="_blank" rel="noopener">Open overlay ↗</a></header>
+  <section class="preview"><iframe title="Live broadcast preview" src="/overlay"></iframe></section>
+  <div class="on-air"><span id="phaseStatus">Waiting for score</span><span id="stripStatus">Information strip</span><button type="button" id="hideGraphic">Hide graphic</button></div>
+  <nav class="desk-nav" aria-label="Scoreboard controls"><a href="#matchSettings">Score & teams</a><a href="#stripSettings">Information strip</a><a href="#graphicControls">Graphics & match</a><a href="#statsEditor">Edit statistics</a></nav>
+  <p id="error" role="alert"></p>
+  <div class="workspace"><main>
+    <form id="settings"><section class="card" id="matchSettings"><h2>Score & teams</h2><div class="grid">
+      <label>Score source<select name="source"><option value="bluetooth">Bluetooth · Generic</option><option value="manual">Manual</option></select></label>
+      <label class="switch">Show overlay<input type="checkbox" name="visible"></label>
+      <label>Batting team<input name="team1" data-auto maxlength="160"></label><label>Bowling team<input name="team2" data-auto maxlength="160"></label>
+      <label><span id="color1Label">Team colour</span><input name="color1" type="color"></label><label><span id="color2Label">Team colour</span><input name="color2" type="color"></label>
+      <label><span id="logo1Label">Team logo · PNG/JPEG</span><input id="upload1" type="file" accept="image/png,image/jpeg"><button type="button" data-clear="1">Clear logo</button></label>
+      <label><span id="logo2Label">Team logo · PNG/JPEG</span><input id="upload2" type="file" accept="image/png,image/jpeg"><button type="button" data-clear="2">Clear logo</button></label>
+      <label>Runs<input name="runs" inputmode="numeric" data-auto></label><label>Wickets<input name="wickets" inputmode="numeric" data-auto></label>
+      <label>Overs<input name="overs" data-auto placeholder="10.2"></label><label>Striker<select name="striker" data-auto><option value="none">Unspecified</option><option value="1">Batter 1</option><option value="2">Batter 2</option></select></label>
+      <label>Batter 1 name<input name="batter1_name" data-auto></label><label>Batter 2 name<input name="batter2_name" data-auto></label>
+      <label>Batter 1 runs<input name="batter1_runs" inputmode="numeric" data-auto></label><label>Batter 2 runs<input name="batter2_runs" inputmode="numeric" data-auto></label>
+      <label>Batter 1 balls<input name="batter1_balls" inputmode="numeric" data-auto></label><label>Batter 2 balls<input name="batter2_balls" inputmode="numeric" data-auto></label>
+      <label>Bowler name<input name="bowler" data-auto></label><label>Bowler wickets–runs<input name="bowler_figures" data-auto placeholder="2–8"></label>
+      <label>Bowler overs<input name="bowler_overs" data-auto placeholder="2.2"></label><label>This over · delivery snapshot<input name="deliveries" data-auto placeholder="W 1 0 4"></label>
+    </div><p class="hint">Colours and logos are saved for each team name and follow that team when batting and bowling switch.</p><div class="actions"><button class="primary" type="submit">Save score & appearance</button><span id="saveStatus" role="status">Ready</span><button type="button" id="reset">New match / clear scores</button></div></section></form>
+
+    <form id="broadcastSettings"><section class="card" id="stripSettings"><h2>Information strip</h2><p class="hint">Main is your free-text message. Add attendance, head-to-head or extra text below. Automatic rotation mixes these with the available match statistics.</p>
+      <label>Main message<input id="mainBanner" maxlength="160" placeholder="Enter the main information strip…"></label>
+      <div class="grid"><label>Rotation<select name="rotation_mode"><option value="mixed">Automatic + manual messages</option><option value="automatic">Automatic statistics only</option><option value="manual">Manual messages only</option></select></label><label>Seconds per message<input name="interval_seconds" type="number" min="5" max="60" value="10"></label></div>
+      <div id="messages" class="message-list"></div><button type="button" id="addMessage">+ Add information</button>
+      <p class="hint">After a wicket: last batter, runs and balls once identified. After a boundary: fours and sixes. One projection message shows the current rate and three higher whole-number rates together. Projections feature more often in the middle and late first innings.</p>
+      <div class="actions"><button class="primary" type="submit">Save broadcast settings</button><span id="broadcastSave" role="status">Ready</span></div>
+    </section>
+    <section class="card" id="graphicControls"><h2>Graphics & match setup</h2><div class="grid">
+      <label>Scheduled overs per innings<input name="total_overs" type="number" min="1" max="100" value="20"></label><label>Wickets per innings<input name="wickets_limit" type="number" min="1" max="10" value="10"></label>
+      <label>Target override · blank = first innings + 1<input name="target" type="number" min="1" max="9999" placeholder="Automatic"></label><label>Graphic duration · seconds<input name="graphic_seconds" type="number" min="5" max="120" value="25"></label>
+      <label>Match title<input name="match_title" maxlength="160" placeholder="Backyard cricket"></label><label>Venue<input name="venue" maxlength="160"></label>
+      <label class="switch">Batting card at drinks · halfway<input name="auto_drinks" type="checkbox" checked></label><label class="switch">Innings-break graphic<input name="auto_innings_break" type="checkbox" checked></label>
+      <label class="switch">Match summary · 30 seconds after finish<input name="auto_summary" type="checkbox" checked></label>
+      <label>Result override · optional<input name="result_override" maxlength="160" placeholder="Team wins by 4 wickets / No result"></label>
+    </div><p class="hint">Save setup changes before using the match controls. The first innings ends automatically at the over or wicket limit. The chase ends at its target or innings limit.</p>
+    <div class="actions"><button type="submit">Save match setup</button></div></section></form>
+
+    <section class="card"><h2>Take a graphic to air</h2><label>Innings<select id="graphicInnings"><option value="0">First innings</option></select></label><div class="graphic-buttons">
+      <button type="button" data-graphic="run_chart">01 · Runs per over</button><button type="button" data-graphic="batting_card">02 · Batting card</button>
+      <button type="button" data-graphic="innings_break">03 · Innings break</button><button type="button" data-graphic="match_summary">04 · Match summary</button>
+    </div><div class="actions"><button type="button" data-action="end_innings">End innings</button><button type="button" data-action="start_chase">Start second innings</button><button type="button" data-action="finish">End match</button><button type="button" data-action="reopen">Reopen / undo finish</button></div><p class="hint">Starting the second innings swaps team colours and logos and clears the live score. The first innings stays in the match summary. A scorer reset plus team swap can also start it automatically.</p></section>
+
+    <section class="card" id="statsEditor"><div class="section-title"><h2>Innings statistics</h2><button type="button" id="loadStats">Load latest stats</button></div><label>Edit innings<select id="statsInnings"></select></label><p id="statsCoverage" class="hint">Statistics appear when a score is received.</p>
+      <p class="hint">Correct or add your lineup, dismissal details and bowling figures here. Blank numbers stay unknown. Live player updates keep filling the current innings; details already entered stay attached to the player.</p>
+      <form id="statistics"><div class="table-scroll"><table class="edit-table"><thead><tr><th>Batter</th><th>Dismissal / not out</th><th>Runs</th><th>Balls</th></tr></thead><tbody id="battingRows"></tbody></table></div><button type="button" id="addBatter">+ Add batter</button>
+      <h3>Bowling figures</h3><div class="table-scroll"><table class="edit-table"><thead><tr><th>Bowler</th><th>Wickets–runs</th><th>Overs</th></tr></thead><tbody id="bowlingRows"></tbody></table></div><button type="button" id="addBowler">+ Add bowler</button>
+      <div class="grid stats-extra"><label>Extras · blank = calculated when complete<input id="statExtras" type="number" min="0" max="9999"></label><label>Fours · blank = recorded deliveries<input id="statFours" type="number" min="0" max="9999"></label><label>Sixes · blank = recorded deliveries<input id="statSixes" type="number" min="0" max="9999"></label></div>
+      <label>Last wicket batter<select id="statLastWicket"><option value="">Automatic / last confirmed</option></select></label>
+      <label>Runs per over · optional correction<input id="statOvers" placeholder="0, 6, 11, 13, ?, …"><span class="hint">Comma-separated. Use ? for unavailable overs. Wicket markers come from recorded score changes.</span></label>
+      <div class="actions"><button class="primary" type="submit">Save statistics</button><span id="statsSave" role="status">Ready</span></div></form>
+    </section>
+  </main><aside>
+    <section class="card"><h2>Score connection</h2><p id="btStatus" role="status">Checking receiver…</p><div class="stats"><span id="packetCount">0 packets</span><span id="lastUpdate">No score received</span></div><p class="hint">Play-Cricket Scorer → External Scoreboard → Bluetooth → Generic (Enhanced) → Device. Look for your PC's Bluetooth name.</p><p class="hint">The receiver provides live player slots, not a full scorecard. Missing names, dismissal details and missed overs can be completed in Innings statistics.</p></section>
+    <section class="card"><h2>Broadcast output · OBS on another PC</h2><label>Studio network address<select id="overlayAddress"><option value="">Finding local addresses…</option></select></label><p>Transparent overlay:</p><code id="overlayUrl">Finding the Studio LAN address…</code><p><button id="copyOverlay" type="button">Copy overlay URL</button> <a id="broadcastLink" class="button" href="/broadcast" target="_blank" rel="noopener">Camera + graphics ↗</a></p><p class="hint" id="overlayNetworkHint">Use the Studio PC's LAN address on the same Wi-Fi or Ethernet. Do not use 127.0.0.1 on the OBS PC.</p><p><a id="overlayCertificate" href="/local-ca.crt" download>Download existing local CA certificate</a></p><p class="hint">Trust this public certificate on the OBS PC, using the same Windows user that runs OBS, then restart OBS. HTTPS uses the same certificate as the umpire and camera pages. Browser Source · Local file off · 1920 × 1080.</p></section>
+    <section class="card"><h2>Receiver log</h2><p class="hint">Logs may include player names.</p><button id="download" type="button">Download recent log</button><pre id="logs">Waiting for packets…</pre></section>
+  </aside></div><script src="/control.js?v=0.3.2"></script>
+</body></html>

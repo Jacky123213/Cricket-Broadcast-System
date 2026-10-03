@@ -1,0 +1,37 @@
+const {JSDOM}=require('jsdom'),fs=require('fs'),assert=require('node:assert/strict');
+const root=require('node:path').resolve(__dirname,'..')+'/';
+const dom=new JSDOM(fs.readFileSync(root+'frontend/umpire/index.html','utf8'),{url:'http://local/umpire',runScripts:'outside-only'}),w=dom.window,d=w.document,errors=[];
+w.addEventListener('error',e=>errors.push(e.message));w.ResizeObserver=class{observe(){}};w.HTMLElement.prototype.scrollIntoView=function(){};
+w.HTMLCanvasElement.prototype.getContext=function(){return {clearRect(){},fillRect(){},drawImage(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},arc(){},fill(){},fillText(){},strokeRect(){},getImageData(){return {data:new Uint8ClampedArray(320*180*4)};}};};
+const proto=w.HTMLMediaElement.prototype;
+Object.defineProperties(proto,{paused:{get(){return this._paused!==false;}},duration:{get(){return 5;}},currentTime:{get(){return this._time||0;},set(t){this._time=t;queueMicrotask(()=>this.dispatchEvent(new w.Event('seeked')));}},readyState:{get(){return this._ready??4;}}});
+Object.defineProperties(w.HTMLVideoElement.prototype,{videoWidth:{get(){return this.src.includes('portrait')?360:640;}},videoHeight:{get(){return this.src.includes('portrait')?640:360;}}});
+proto.load=function(){queueMicrotask(()=>this.dispatchEvent(new w.Event('loadedmetadata')));};proto.play=function(){this._paused=false;return Promise.resolve();};proto.pause=function(){this._paused=true;};
+w.WebSocket=class{static OPEN=1;addEventListener(){}send(){}};w.RTCPeerConnection=class{};
+const clips=['landscape','portrait','third','fourth'].flatMap(id=>[0,4000].map((t,i)=>({id:id+i,device_id:id,start_ms:t,end_ms:t+5000,url:'/clips/'+id+i,uncertainty_ms:3})));
+w.fetch=async(url,opts)=>({ok:true,json:async()=>url.startsWith('/api/replays')?{id:'review',start_ms:0,end_ms:8000,live_delay_ms:3000,clips,audio:{landscape:[{t:1000,peak:.5,impact:true}],portrait:[{t:1500,peak:.3,impact:false}]}}:url==='/api/devices'?{devices:['landscape','portrait','third','fourth'].map(id=>({device_id:id,name:id}))}:url==='/api/buffer'?{server_ms:10000,cameras:{},recorders:{},audio:{}}:url==='/api/server-info'?{camera_urls:['https://192.168.1.2:8765/camera']}:{sent_ms:10000}});
+for(const name of ['common','view-controls','live-inspect','umpire','replay-engine','replay','ball-detector','review-desk','assistance'])w.eval(fs.readFileSync(root+'frontend/assets/'+name+'.js','utf8'));
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+(async()=>{
+ d.querySelector('[data-replay-seconds="10"]').click();await wait(1150);
+ assert.equal(d.querySelectorAll('.angle-thumb').length,4);assert.equal(d.querySelectorAll('#programSlot .replay-angle').length,0);assert.equal(d.querySelectorAll('#previewSlot .replay-angle').length,0);
+ const assign=(slot,id)=>{d.getElementById(slot+'Empty').click();assert.equal(d.getElementById('cameraPicker').hidden,false);d.getElementById('pickerCamera').value=id;d.getElementById('pickerApply').click();};assign('preview','landscape');assign('program','portrait');
+ d.getElementById('replayPlay').click();await wait(250);assert.equal(d.getElementById('replayState').textContent,'PLAYING');
+
+ const held=d.querySelector('#programSlot video:not([hidden])');held._ready=2;
+ await wait(200);assert.equal(d.getElementById('replayState').textContent,'BUFFERING');
+ const heldPosition=d.getElementById('replayPosition').value;await wait(300);assert.equal(d.getElementById('replayPosition').value,heldPosition);
+ held._ready=4;held.dispatchEvent(new w.Event('canplay'));await wait(250);assert.equal(d.getElementById('replayState').textContent,'PLAYING');
+ d.getElementById('replayPosition').value='1500';d.getElementById('replayPosition').dispatchEvent(new w.Event('input'));await wait(20);assert.equal(d.getElementById('replayState').textContent,'PAUSED');
+ assert.equal(d.querySelector('#programSlot video:not([hidden])').currentTime,1.5);
+ d.querySelector('#programSlot .change-camera').click();d.getElementById('pickerCamera').value='third';d.getElementById('pickerApply').click();d.querySelector('#programSlot .change-camera').click();d.getElementById('pickerCamera').value='portrait';d.getElementById('pickerApply').click();assert.equal(d.querySelector('#programSlot .angle-header strong').textContent,'portrait');
+ d.querySelector('#programSlot .angle-toolbar input').value='2';d.querySelector('#programSlot .angle-toolbar input').dispatchEvent(new w.Event('input'));assert.ok(d.querySelector('#programSlot .angle-layer').style.transform.includes('scale(2)'));
+ [...d.querySelectorAll('#programSlot button')].find(b=>b.textContent==='Fullscreen').click();assert.ok(d.getElementById('replayPanel').classList.contains('focus-mode'));assert.ok(!d.getElementById('exitFocus').hidden);assert.equal(d.getElementById('focusAudio').hidden,false);assert.equal(d.getElementById('focusAudioSource').value,'portrait');d.getElementById('focusAudioSource').value='landscape';d.getElementById('focusAudioSource').dispatchEvent(new w.Event('change'));assert.ok(d.getElementById('focusAudioStatus').textContent.includes('Tap waveform'));d.getElementById('focusAudioSource').value='third';d.getElementById('focusAudioSource').dispatchEvent(new w.Event('change'));assert.ok(d.getElementById('focusAudioStatus').textContent.includes('No recorded waveform'));
+ d.getElementById('exitFocus').click();assert.ok(!d.getElementById('replayPanel').classList.contains('focus-mode'));assert.equal(d.getElementById('focusAudio').hidden,true);
+ d.querySelector('[data-pane="preview"]').click();assert.equal(d.getElementById('replayPanel').dataset.pane,'preview');
+ d.getElementById('wicketMark').click();assert.ok(d.getElementById('wicketTime').textContent.includes('manual'));
+ d.querySelector('#previewSlot .change-camera').click();d.getElementById('pickerCamera').value='';d.getElementById('pickerApply').click();assert.equal(d.getElementById('previewEmpty').hidden,false);
+ d.getElementById('returnLive').click();assert.equal(d.getElementById('replayPanel').hidden,true);
+ d.querySelector('[data-replay-seconds="10"]').click();await wait(10);d.getElementById('returnLive').click();await wait(1100);assert.equal(d.getElementById('replayPanel').hidden,true);assert.equal(d.querySelectorAll('.angle-thumb').length,0);
+ assert.deepEqual(errors,[]);console.log('DOM smoke passed: empty slots, assignment/change/clear, fullscreen waveform source/no-data states, play/pause/scrub, zoom, mobile tabs, wicket marker, return live and cancelled load');dom.window.close();
+})().catch(e=>{console.error(e);dom.window.close();process.exitCode=1;});

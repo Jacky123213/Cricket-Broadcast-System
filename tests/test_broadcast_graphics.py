@@ -1,0 +1,248 @@
+import copy
+from unittest.mock import patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+from server.broadcast_graphics import BroadcastGraphics, balls, validate_config
+from server.config import Settings
+from server.main import create_app
+from server.scoreboard_state import DEFAULT, State
+
+
+def scoreboard(**changes):
+    return {**DEFAULT, 'team1': 'Pavilion', 'team2': 'Creek', 'source': 'manual',
+            'runs': '0', 'wickets': '0', 'overs': '0.0', **changes}
+
+
+def observe(engine, score, now=100):
+    engine.queue(score, score, now)
+    engine.flush(now, force=True)
+    return engine.snapshot(score, now)
+
+
+def test_legal_balls_and_one_combined_projection():
+    assert balls('10.2') == 62
+    assert balls('10.6') is None
+    engine = BroadcastGraphics()
+    engine.configure({'rotation_mode': 'automatic', 'interval_seconds': 5})
+    score = scoreboard(runs='66', wickets='3', overs='10.2')
+    observe(engine, score)
+    first = engine.snapshot(score, 100)['strip']['text']
+    assert first == 'PROJECTED: 6.39 RPO 128 | 7 RPO 134 | 8 RPO 143 | 9 RPO 153'
+    assert len([c for c in engine.candidates(score) if c['kind'] == 'projection']) == 1
+    engine.configure({'rotation_mode': 'mixed'})
+    score['banner'] = 'Summer cricket'
+    assert engine.snapshot(score, 106)['strip'] == {'kind': 'main', 'text': 'Summer cricket'}
+    # A boundary interrupts immediately; projections have no forced follow-up steps.
+    engine.priority = 'boundaries'
+    engine.next_strip_at = 0
+    engine.innings[0]['fours'] = 4
+    assert engine.snapshot(score, 107)['strip']['kind'] == 'boundaries'
+
+
+def test_duplicate_cov_undo_and_over_transition():
+    engine = BroadcastGraphics()
+    observe(engine, scoreboard())
+    s = scoreboard(overs='0.2', runs='10', deliveries='4 6')
+    observe(engine, s, 102)
+    observe(engine, s, 104)
+    stats = engine.snapshot(s, 104)['innings'][0]
+    assert (stats['fours'], stats['sixes']) == (1, 1)
+    s.update(overs='0.1', runs='4', deliveries='4')
+    observe(engine, s, 106)
+    assert engine.snapshot(s, 106)['innings'][0]['sixes'] == 0
+    s.update(overs='1.0', runs='12', deliveries='4 0 0 0 4 4')
+    observe(engine, s, 108)
+    s.update(deliveries='')
+    observe(engine, s, 110)
+    s.update(overs='1.1', runs='18', deliveries='6')
+    stats = observe(engine, s, 112)['innings'][0]
+    assert (stats['fours'], stats['sixes']) == (3, 1)
+    assert stats['chart'][0]['runs'] == 12
+    assert stats['chart'][1]['runs'] == 6
+
+
+def test_missing_overs_are_unknown_instead_of_invented():
+    engine = BroadcastGraphics()
+    s = scoreboard(overs='4.0', runs='31')
+    data = observe(engine, s)
+    assert [row['runs'] for row in data['innings'][0]['chart'][:4]] == [None]*4
+    assert data['innings'][0]['extras'] is None
+
+
+def test_wicket_identity_waits_for_player_change_and_undo_removes_it():
+    engine = BroadcastGraphics()
+    s = scoreboard(batter1_name='Ali', batter1_runs='12', batter1_balls='10',
+                   batter2_name='Bo', batter2_runs='4', batter2_balls='6', runs='16', overs='2.4')
+    observe(engine, s)
+    s.update(wickets='1', overs='2.5')
+    assert observe(engine, s, 102)['innings'][0]['last_wicket'] is None
+    s.update(batter2_name='Cam', batter2_runs='0', batter2_balls='0')
+    data = observe(engine, s, 104)
+    assert data['innings'][0]['last_wicket']['name'] == 'Bo'
+    assert data['strip']['text'] == 'LAST WICKET  Bo 4 (6)'
+    s.update(wickets='0', overs='2.4', batter2_name='Bo', batter2_runs='4', batter2_balls='6')
+    data = observe(engine, s, 106)
+    assert data['innings'][0]['last_wicket'] is None
+    assert not data['innings'][0]['wicket_events']
+
+
+def test_drinks_once_at_halfway_and_early_wickets_end_first_innings():
+    engine = BroadcastGraphics()
+    engine.configure({'total_overs': 4, 'wickets_limit': 3})
+    observe(engine, scoreboard(overs='1.5', runs='18'))
+    s = scoreboard(overs='2.0', runs='20')
+    assert observe(engine, s, 102)['active']['reason'] == 'Drinks break'
+    engine.action({'action': 'hide'}, s, 103)
+    assert observe(engine, s, 104)['active'] is None
+    s.update(wickets='3', overs='2.1')
+    data = observe(engine, s, 106)
+    assert data['phase'] == 'innings_break'
+    assert data['active']['kind'] == 'innings_break'
+
+
+def test_chase_winner_and_summary_exactly_thirty_seconds_later():
+    engine = BroadcastGraphics()
+    engine.configure({'total_overs': 2, 'wickets_limit': 5})
+    observe(engine, scoreboard(overs='2.0', runs='12', wickets='2'))
+    s = scoreboard(team1='Creek', team2='Pavilion', runs='0', overs='0.0')
+    observe(engine, s, 103)
+    assert len(engine.innings) == 2
+    s.update(runs='13', wickets='2', overs='1.1')
+    data = observe(engine, s, 110)
+    assert data['phase'] == 'complete'
+    assert data['result'] == 'Creek wins by 3 wickets'
+    assert data['active'] is None
+    assert engine.snapshot(s, 139.99)['active'] is None
+    assert engine.snapshot(s, 140)['active']['kind'] == 'match_summary'
+    engine.action({'action': 'hide'}, s, 141)
+    assert engine.snapshot(s, 142)['active'] is None
+    engine.action({'action': 'reopen'}, s, 143)
+    assert engine.snapshot(s, 144)['phase'] == 'live'
+
+
+@pytest.mark.parametrize('runs,expected', [('11','Pavilion wins by 1 run'),('12','Match tied')])
+def test_defending_result_and_tie(runs, expected):
+    engine = BroadcastGraphics()
+    engine.configure({'total_overs': 1})
+    observe(engine, scoreboard(overs='1.0', runs='12'))
+    observe(engine, scoreboard(team1='Creek', team2='Pavilion'), 102)
+    s = scoreboard(team1='Creek', team2='Pavilion', overs='1.0', runs=runs)
+    assert observe(engine, s, 104)['result'] == expected
+
+
+def test_manual_messages_stats_and_colour_changes():
+    engine = BroadcastGraphics()
+    engine.configure({'rotation_mode':'manual', 'messages': [
+        {'type':'attendance','attendance':'1234'},
+        {'type':'head_to_head','team1':'Pavilion','team2':'Creek','wins1':'3','wins2':'2'}]})
+    s = scoreboard(banner='Welcome to the ground', runs='24', overs='4.0')
+    observe(engine, s)
+    assert {c['text'] for c in engine.candidates(s)} == {
+        'Welcome to the ground', 'ATTENDANCE  1,234', 'HEAD TO HEAD  Pavilion (3)  Creek (2)'}
+    engine.edit_stats({'innings':0, 'fours':4, 'sixes':1, 'over_runs':[0,6,11,7],
+                       'batters':[{'name':'Ali','runs':20,'balls':20,'dismissal':'b Bo'},
+                                  {'name':'Cam','runs':4,'balls':4,'dismissal':'not out'}]})
+    s['color1'] = '#123456'
+    stats = engine.snapshot(s, 102)['innings'][0]
+    assert stats['color'] == '#123456'
+    assert stats['last_wicket']['name'] == 'Ali'
+    assert stats['boundaries_complete'] is True
+    assert stats['extras'] == 0
+    assert [i['runs'] for i in stats['chart'][:4]] == [0,6,11,7]
+
+
+def test_packet_batch_does_not_count_transient_chase_total():
+    engine = BroadcastGraphics()
+    engine.configure({'total_overs': 1})
+    observe(engine, scoreboard(overs='1.0',runs='12'))
+    # Team swap arrives before the total/overs reset. Wait for the complete batch.
+    s = scoreboard(team1='Creek',team2='Pavilion',overs='1.0',runs='12')
+    engine.queue(s, {'team1':'Creek'}, 102)
+    s.update(overs='0.0',runs='0')
+    engine.queue(s, {'overs':'0.0','runs':'0'}, 102.1)
+    data=engine.snapshot(s, 103.5)
+    assert data['phase']=='live'
+    assert data['innings'][1]['runs']==0
+
+
+def test_cov_before_ball_count_preserves_previous_over():
+    engine = BroadcastGraphics()
+    s = scoreboard()
+    observe(engine, s)
+    s.update(overs='1.0', runs='14', deliveries='4 4 4 0 1 1')
+    observe(engine, s, 102)
+    s.update(deliveries='6')
+    engine.queue(s, {'deliveries':'6'}, 104)
+    s.update(overs='1.1', runs='20')
+    engine.queue(s, {'overs':'1.1','runs':'20'}, 104.1)
+    data = engine.snapshot(s, 105.3)['innings'][0]
+    assert (data['fours'],data['sixes'])==(3,1)
+    assert [row['runs'] for row in data['chart'][:2]]==[14,6]
+
+
+def test_automatic_chase_keeps_team_colours(tmp_path):
+    state=State(tmp_path)
+    with patch('server.scoreboard_state.time.time',return_value=100):
+        state.save(scoreboard(runs='12',overs='1.0',color1='#123456',color2='#abcdef'))
+        state.broadcast_settings({'total_overs':1})
+        state.flush()
+    with patch('server.scoreboard_state.time.time',return_value=102):
+        state.save({'team1':'Creek','team2':'Pavilion','runs':'0','wickets':'0','overs':'0.0'})
+    with patch('server.scoreboard_state.time.time',return_value=104):
+        data=state.snapshot()
+    assert data['score']['color1']=='#abcdef'
+    assert data['score']['color2']=='#123456'
+    assert data['graphics']['innings'][0]['color']=='#123456'
+    assert data['graphics']['innings'][1]['color']=='#abcdef'
+
+
+def test_late_player_and_boundary_packets_finish_the_scorecard():
+    engine = BroadcastGraphics()
+    engine.configure({'total_overs':1})
+    s=scoreboard(overs='1.0',runs='12',bowler='Bo',bowler_figures='0–8',bowler_overs='0.5')
+    assert observe(engine,s)['phase']=='innings_break'
+    s.update(bowler_figures='0–12',bowler_overs='1.0',deliveries='0 0 4 4 0 4')
+    data=observe(engine,s,102)
+    assert data['innings'][0]['bowlers'][0]['figures']=='0–12'
+    assert data['innings'][0]['fours']==3
+    assert data['phase']=='innings_break'
+
+
+def test_validation_atomic_stats_and_persistence(tmp_path):
+    state = State(tmp_path)
+    with patch('server.scoreboard_state.time.time', return_value=100):
+        state.save(scoreboard(runs='10',overs='1.0'))
+        state.graphics.flush(100, force=True)
+        state.broadcast_settings({'total_overs':4})
+        state.broadcast_stats({'innings':0,'fours':2,'sixes':0,'extras':2})
+        original=copy.deepcopy(state.graphics.innings)
+        with pytest.raises(ValueError): state.broadcast_stats({'innings':0,'fours':5,'batters':[{'name':'X','runs':-1}]})
+        assert state.graphics.innings==original
+        state.broadcast_action({'action':'show','kind':'run_chart'})
+    restored=State(tmp_path)
+    assert restored.graphics.config['total_overs']==4
+    assert restored.graphics.innings[0]['fours']==2
+    assert restored.graphics.active is None
+    restored.reset()
+    assert restored.graphics.innings==[]
+    assert restored.graphics.config['total_overs']==4
+    for changes in ({'total_overs':True}, {'target':-1}, {'auto_summary':'yes'}, {'messages':[{'type':'attendance','attendance':'lots'}]}):
+        with pytest.raises(ValueError): validate_config(changes)
+
+
+def test_broadcast_http_actions(tmp_path):
+    state = State(tmp_path/'scores')
+    app = create_app(Settings(database_path=tmp_path/'test.db'),scoreboard=state)
+    with patch('server.main.start_receiver'), TestClient(app) as client:
+        assert client.post('/api/scoreboard/broadcast/settings',json={'total_overs':2}).status_code==200
+        assert client.post('/api/scoreboard/broadcast/settings',json={'total_overs':0}).status_code==400
+        assert client.post('/api/scoreboard/settings',json=scoreboard(runs='12',overs='2.0')).status_code==200
+        assert client.post('/api/scoreboard/broadcast/action',json={'action':'end_innings'}).status_code==200
+        assert client.post('/api/scoreboard/broadcast/action',json={'action':'start_chase'}).status_code==200
+        data=client.get('/api/scoreboard/state').json()
+        assert data['score']['team1']=='Creek'
+        assert data['score']['color1']==DEFAULT['color2']
+        assert data['graphics']['innings'][0]['runs']==12
+        assert client.post('/api/scoreboard/broadcast/action',json={'action':'show','kind':'run_chart','innings':'bad'}).status_code==400

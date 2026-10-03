@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111613">
+  <title>Backyard Cricket Studio</title>
+  <link rel="stylesheet" href="/desktop.css?build=__STUDIO_BUILD__">
+</head>
+<body>
+  <aside class="rail">
+    <a class="wordmark" href="#home" data-view="home" aria-label="Backyard Cricket Studio home"><span>BC</span><strong>Backyard<br>Cricket</strong></a>
+    <nav aria-label="Application sections">
+      <button class="nav active" data-view="home"><span>⌂</span>Home</button>
+      <button class="nav" data-view="replay"><span>▶</span>Replay studio</button>
+      <button class="nav" data-view="scoreboard"><span>▤</span>Scoreboard</button>
+      <button class="nav" data-view="settings"><span>⚙</span>Settings</button>
+      <button class="nav" data-view="help"><span>?</span>Troubleshooting</button>
+    </nav>
+    <div class="rail-status"><i id="serverDot"></i><span id="serverText">Starting local server…</span></div>
+  </aside>
+
+  <main>
+    <section class="view active" id="view-home">
+      <header class="page-head"><div><p class="kicker">MATCH CONTROL</p><h1>Your ground, in one place.</h1><p class="lede">Run cameras, reviews and broadcast graphics from this PC. Phones and tablets only need a browser.</p></div><span class="version">Studio 1.0.2 · Overlay 0.3.2</span></header>
+      <div class="hero-grid">
+        <button class="launch-card replay" data-view="replay"><span class="number">01</span><div><p>DECISION REVIEW</p><h2>Replay Studio</h2><span>Connect field cameras, review incidents and inspect synchronized angles.</span></div><b>Open →</b></button>
+        <button class="launch-card score" data-view="scoreboard"><span class="number">02</span><div><p>LIVE GRAPHICS</p><h2>Scoreboard</h2><span>Receive Play-Cricket scores or operate the overlay manually.</span></div><b>Open →</b></button>
+      </div>
+      <div class="status-grid">
+        <article><span class="label">CAMERAS</span><strong id="cameraCount">0</strong><small>connected now</small></article>
+        <article><span class="label">SCORE FEED</span><strong id="scoreCount">0</strong><small>packets received</small></article>
+        <article><span class="label">SECURE SERVER</span><strong id="secureState">Checking</strong><small>required for mobile cameras</small></article>
+      </div>
+      <section class="connect-panel"><div><p class="kicker">QUICK CONNECT</p><h2>Bring a camera onto the field</h2><p>Open one of these links on an iPhone, iPad, Android device or Raspberry Pi connected to this Wi-Fi.</p></div><div id="cameraLinks" class="links"></div></section>
+    </section>
+
+    <section class="view framed" id="view-replay"><header class="frame-head"><div><p class="kicker">BACKYARD DRS 0.15.2</p><h1>Replay Studio</h1></div><a href="/umpire" target="_blank">Open in browser ↗</a></header><iframe src="/umpire" title="Replay Studio"></iframe></section>
+    <section class="view framed" id="view-scoreboard"><header class="frame-head"><div><p class="kicker">BROADCAST DESK · OVERLAY 0.3.2</p><h1>Scoreboard</h1></div><nav class="score-shortcuts" aria-label="Broadcast shortcuts"><button type="button" data-score-section="graphicControls">Graphics</button><button type="button" data-score-section="statsEditor">Edit stats</button><a href="/overlay" target="_blank">Open overlay ↗</a></nav></header><iframe id="scoreboardFrame" src="/scoreboard?build=__STUDIO_BUILD__" title="Scoreboard controls"></iframe></section>
+
+    <section class="view content" id="view-settings">
+      <header class="page-head"><div><p class="kicker">SETTINGS</p><h1>Connections & output</h1></div></header>
+      <div class="settings-grid">
+        <article><h2>Mobile umpire</h2><p>Use the umpire page from an iPad or another computer on the same network.</p><div id="umpireLinks" class="links"></div></article>
+        <article><h2>Broadcast output · another OBS PC</h2><p>Use the Studio PC's LAN address on the same Wi-Fi or Ethernet. HTTPS and certificate are shared with the umpire pages. Browser Source: Local file off, 1920 × 1080.</p><label for="overlayAddress">Studio network address</label><select id="overlayAddress"><option>Finding addresses…</option></select><a id="broadcastLink" href="/broadcast" target="_blank">Open camera + overlay output ↗</a><code id="overlayUrl">Loading…</code><button id="copyOverlay">Copy overlay URL</button><p><a id="overlayCertificate" href="/local-ca.crt" download>Download existing local CA certificate</a></p><p>Trust the public CA certificate on the OBS PC under the Windows user running OBS, then restart OBS. Never copy the private key files.</p></article>
+        <article><h2>Camera compatibility</h2><p>Camera pages now list the actual lenses reported by Safari, Chrome and Chromium after permission is granted. Start at 720p / 30 FPS.</p><a href="/camera" target="_blank">Open local camera page ↗</a></article>
+        <article><h2>Small camera hardware</h2><p>Raspberry Pi works through Chromium and a CSI/USB camera. ESP32/Arduino MJPEG cameras can supply a broadcast source, but cannot yet record the synchronized DRS buffer.</p><a href="/hardware" target="_blank">Hardware setup guide ↗</a></article>
+      </div>
+    </section>
+
+    <section class="view content" id="view-help">
+      <header class="page-head"><div><p class="kicker">TROUBLESHOOTING</p><h1>Match-day checks</h1><p class="lede">Work from the top down. Most connection faults are certificate, Wi-Fi isolation or camera permission issues.</p></div></header>
+      <div class="diagnostics"><article><span>SERVER</span><strong id="diagServer">Checking…</strong></article><article><span>BLUETOOTH</span><strong id="diagBluetooth">Checking…</strong></article><article><span>WINDOWS SLEEP</span><strong id="diagSleep">Checking…</strong></article></div>
+      <details open><summary>Camera does not appear</summary><ol><li>Put the PC and device on the same normal Wi-Fi network.</li><li>Install and trust the local certificate on Apple/Android.</li><li>Open the camera page, allow camera permission, then choose the required lens.</li><li>Avoid guest Wi-Fi and VPNs that block local devices.</li></ol></details>
+      <details><summary>Replay is buffering or has gaps</summary><p>Start with 720p / 30 FPS, keep camera pages visible and test for at least 70 seconds. Reduce the number of cameras before increasing quality.</p></details>
+      <details><summary>Scoreboard phone cannot find the PC</summary><p>Use Generic (Enhanced) in Play-Cricket Scorer. Bluetooth must support peripheral mode. A growing packet count proves that data is arriving.</p></details>
+      <details><summary>Overlay and DRS together</summary><p>The same umpire camera can remain connected to DRS while its live view is used for production. Add the scoreboard overlay above that video source in OBS. DRS recording and overlay graphics share this server but remain separate layers.</p></details>
+    </section>
+  </main>
+  <script src="/desktop.js?build=__STUDIO_BUILD__"></script>
+</body>
+</html>

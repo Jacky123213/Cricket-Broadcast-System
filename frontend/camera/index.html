@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07090c">
+  <title>Camera Setup · Backyard Cricket DRS</title>
+  <link rel="stylesheet" href="/static/styles.css?v=0.15.2">
+<link rel="stylesheet" href="/static/studio.css?v=0.15.2"></head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"></div>
+      <div><div class="brand-kicker">Camera device</div><div class="brand-title">Backyard Cricket DRS</div></div>
+    </div>
+    <div id="connectionPill" class="status-pill offline"><span class="status-dot"></span><span>Not connected</span></div>
+  </header>
+
+  <main class="page camera-page">
+    <div class="section-heading">
+      <div><p class="eyebrow">Device onboarding</p><h1>Configure camera</h1></div>
+    </div>
+
+    <section class="panel setup-layout" aria-label="Camera configuration">
+
+
+      <div class="preview-panel">
+        <video id="preview" autoplay muted playsinline hidden></video>
+        <div id="previewEmpty" class="preview-empty">
+          <div><div class="camera-icon" aria-hidden="true"></div><h2>Local preview</h2><p>Test the selected camera before connecting.</p></div>
+        </div>
+        <div class="preview-label">LIVE CAMERA SOURCE</div>
+      </div>
+      <div class="capture-zoom-dock"><label for="cameraZoom">Zoom</label><input id="cameraZoom" type="range" min="1" max="4" step="0.01" value="1" disabled><button id="resetZoom" type="button" class="btn">Reset zoom</button><p id="zoomStatus" role="status">Test or connect a camera to enable zoom.</p><p>Use the slider or pinch the preview. Digital zoom crops the live feed and recorded replay. Keep the page visible. Recalibrate after changing camera or zoom.</p></div>
+<details class="capture-settings" open><summary>Camera setup · front/rear, quality &amp; microphone</summary>      <form id="cameraForm" class="setup-form" onsubmit="return false">
+        <div class="form-grid">
+          <div class="field field-wide">
+            <label for="cameraName">Camera name</label>
+            <input id="cameraName" maxlength="48" required placeholder="e.g. Pavilion phone">
+          </div>
+          <div class="field field-wide">
+            <label for="cameraRole">Camera role</label>
+            <select id="cameraRole">
+              <option value="UMPIRE_POV">Umpire POV</option>
+              <option value="CREASE_LEFT">Crease left</option>
+              <option value="CREASE_RIGHT">Crease right</option>
+              <option value="WICKET_MIC">Wicket microphone</option>
+              <option value="OTHER">Other angle</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="cameraFacing">Camera direction</label><select id="cameraFacing"><option value="environment">Rear / outward camera</option><option value="user">Front / selfie camera</option></select>
+            <label for="cameraDevice">Available camera</label><select id="cameraDevice"><option value="">Automatic (recommended)</option></select><p id="cameraDeviceNote">Tap Test camera once to grant permission and reveal every camera on this device.</p><p>Disconnect before changing cameras. Zoom can change while connected.</p>
+            <label for="resolution">Target resolution</label>
+            <select id="resolution">
+              <option value="1280x720">720p</option>
+              <option value="1920x1080">1080p</option>
+              <option value="640x480">480p</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="fps">Target FPS</label>
+            <select id="fps"><option>30</option><option>60</option><option>24</option><option>15</option></select>
+          </div>
+          <div class="field field-wide">
+            <label for="microphone">Microphone</label>
+            <select id="microphone"><option value="false">Disabled</option><option value="true">Enabled</option></select>
+          </div>
+        </div>
+        <div id="secureWarning" class="warning" hidden>
+          This page is using HTTP. Device registration works, but most phones block camera and microphone access until the server uses a trusted HTTPS certificate.
+        </div>
+        <div class="setup-actions">
+          <button id="previewButton" class="btn" type="button">Test camera</button>
+          <button id="connectButton" class="btn btn-primary" type="button">Connect device</button>
+        </div>
+        <div id="runtimeError" class="warning error-warning" hidden></div>
+      </form></details>    </section>
+
+    <p id="recordingStatus" role="status">Replay buffer starts after connection and clock measurement.</p>
+    <button id="retryRecording" class="btn" type="button">Start/retry replay</button>
+    <section id="connectionCard" class="panel connection-card" aria-live="polite">
+      <div class="connection-hero">
+        <div class="signal-ring">●</div>
+        <div><p class="eyebrow">Control link active</p><h2 id="connectedName">Camera connected</h2></div>
+      </div>
+      <div class="connection-facts">
+        <div class="stat"><div id="latencyValue" class="stat-value">—</div><div class="stat-label">Round trip</div></div>
+        <div class="stat"><div id="heartbeatValue" class="stat-value">0</div><div class="stat-label">Heartbeats</div></div>
+        <div class="stat"><div id="streamStatusValue" class="stat-value">READY</div><div class="stat-label">Video link</div></div>
+      </div>
+      <button id="disconnectButton" class="btn btn-danger" style="margin-top:16px" type="button">Disconnect</button>
+    </section>
+  <section class="panel side-panel"><button type="button" class="btn" id="enableAudio">Enable audio analysis / test mic</button><button type="button" class="btn" id="stopAudio">Stop analysis</button><p id="audioStatus">Tap to allow microphone access and speak. A moving dBFS reading confirms local capture. For replay sound, enable microphone before connecting.</p></section></main>
+  <div id="toast" class="toast" role="status"></div>
+  <script>
+    (function () {
+      var form = document.getElementById("cameraForm");
+      var panel = document.getElementById("runtimeError");
+      form.addEventListener("submit", function (event) { event.preventDefault(); });
+      function report(message) {
+        panel.hidden = false;
+        panel.textContent = "Camera controls could not start: " + message + ". Try reloading the page. If it continues, send the umpire the browser name/version and this message.";
+      }
+      window.addEventListener("error", function (event) { report(event.message || "browser script error"); });
+      window.addEventListener("unhandledrejection", function (event) {
+        var reason = event.reason && event.reason.message ? event.reason.message : String(event.reason || "browser promise error");
+        report(reason);
+      });
+      window.setTimeout(function () {
+        if (!window.__drsCameraReady) report("this browser did not load the camera module");
+      }, 2500);
+    }());
+  </script>
+  <script defer src="/static/common.js?v=0.15.2"></script>
+  <script defer src="/static/recording.js?v=0.15.2"></script>
+  <script defer src="/static/audio.js?v=0.15.2"></script><script defer src="/static/camera-optics.js?v=0.15.2"></script><script defer src="/static/camera.js?v=0.15.2"></script>
+</body>
+</html>

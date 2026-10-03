@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07090c">
+  <title>Umpire Console · Backyard Cricket DRS</title>
+  <link rel="stylesheet" href="/static/styles.css?v=0.15.2">
+<link rel="stylesheet" href="/static/studio.css?v=0.15.2"></head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"></div>
+      <div><div class="brand-kicker">Umpire console</div><div class="brand-title">Backyard Cricket DRS</div></div>
+    </div>
+    <div class="console-summary">
+      <div id="clock" class="clock">00:00:00</div>
+      <div id="serverPill" class="status-pill offline"><span class="status-dot"></span><span>Server link</span></div>
+      <div class="status-pill online"><span class="status-dot"></span><span>Review desk 0.15.2</span></div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="section-heading">
+      <div><p class="eyebrow">Live device control</p><h1>Camera wall</h1></div>
+      <div class="muted"><span id="cameraCount">0</span> cameras connected</div>
+    </div>
+
+    <section class="panel review-desk">
+      <div class="replay-controls" id="reviewButtons"></div>
+      <p id="eventStatus" role="status">Choose a review to replay the incident around now.</p>
+      <label>Seconds before <input id="windowBefore" type="number" min="1" max="30" value="5"></label>
+      <label>Seconds after <input id="windowAfter" type="number" min="0" max="10" value="3"></label>
+      <meter id="soundMeter" min="0" max="1" value="0"></meter><p id="soundLevel">No microphone analysis received</p>
+    </section>
+ <section id="liveLaunch" class="panel replay-controls">
+        <button class="btn btn-primary" data-replay-seconds="60">REPLAY 60 SEC</button>
+        <button class="btn" data-replay-seconds="30">30 SEC</button>
+        <button class="btn" data-replay-seconds="10">10 SEC</button>
+        <details class="buffer-details"><summary>Recording &amp; sync status</summary><div id="bufferStatus" role="status">Waiting for buffer…</div></details>
+    </section>
+    <section id="replayPanel" data-pane="preview" hidden aria-label="Replay studio">
+      <header class="studio-heading"><div><p class="eyebrow">MULTI-ANGLE REVIEW</p><h1>Replay studio</h1></div><span id="replayState" class="studio-state">PAUSED</span><button class="btn" id="returnLive">Return to LIVE</button></header>
+      <p id="replayNote" role="status"></p>
+      <div class="mobile-view-tabs"><button class="btn" data-pane="preview" aria-pressed="true">View 1</button><button class="btn" data-pane="program" aria-pressed="false">View 2</button></div>
+      <div class="studio-monitors"><section id="previewSlot" aria-label="Camera view 1"><button class="empty-camera-slot" id="previewEmpty"><span>＋</span><strong>View 1</strong>Tap to choose a camera</button></section><section id="programSlot" aria-label="Camera view 2"><button class="empty-camera-slot" id="programEmpty"><span>＋</span><strong>View 2</strong>Tap to choose a camera</button></section></div>
+      <div class="source-heading"><h2>Camera angles</h2><span>Tap a view above to choose its camera</span></div>
+      <div id="replayWall" class="source-grid"></div><div id="angleParking" aria-hidden="true"></div>
+      <details class="review-tools"><summary>Audio waveform, run-out markers &amp; calibration</summary><div class="analysis-desk">
+ <section class="panel side-panel"><h3>Run-out assistance</h3><p>Pause on the first visible wicket break. These are your observations, not automatic detections.</p><button class="btn" id="wicketMark">Mark wicket broken here</button><button class="btn" id="wicketJump">Jump to wicket break</button><p id="wicketTime">WICKET BROKEN: not marked</p><label>Batter grounded behind crease <select id="behindCrease"><option>UNCERTAIN</option><option>YES</option><option>NO</option></select></label></section>
+ <details id="calibrationPanel"><summary>Camera calibration — ground plane</summary><p>Pause a clear replay, select an angle, then click four known pitch corners in order: near-left, near-right, far-right, far-left. Measure your own pitch. Recalibrate after moving a phone or changing zoom/resolution.</p>
+ <select id="calCamera" aria-label="Calibration camera"></select><button class="btn" id="calCapture">Use paused frame / reset points</button><canvas id="calImage" width="640" height="360" style="width:100%;max-width:640px"></canvas>
+ <label>Pitch length (m)<input id="pitchLength" type="number" value="10" min="1" max="40" step=".01"></label><label>Width (m)<input id="pitchWidth" type="number" value="2" min=".3" max="10" step=".01"></label><label>Near crease from near end (m)<input id="creaseDistance" type="number" value="1.22" min="0" step=".01"></label><label>Measured focal length in pixels (optional)<input id="focalPixels" type="number" min="1" placeholder="From intrinsic calibration"></label><button class="btn" id="calSave">Save calibration</button><button class="btn" id="calLoad">Load saved calibration</button><p id="calStatus" role="status"></p><canvas id="pitchMap" width="220" height="380" aria-label="Top-down measured pitch"></canvas>
+ </details>
+<p class="eyebrow">Sound envelope · possible impacts are not proof of a bat edge</p><canvas id="waveform" width="1000" height="90" aria-label="Replay audio waveform"></canvas><div id="timelineMarkers" class="ball-history"></div>
+ <label><input id="detectBall" type="checkbox"> Experimental 2D ball candidates</label> <label>Ball colour <input id="ballColour" type="color" value="#b92330"></label> <label>Tolerance <input id="ballTolerance" type="range" min="10" max="160" value="70"></label><p id="detectionNote">Choose the ball colour. Coloured background objects may also be detected. No calibration, 3D tracking or LBW decision.</p></div></details>
+      <div id="cameraPicker" class="camera-picker" role="dialog" aria-modal="true" aria-labelledby="pickerTitle" hidden><div class="panel"><h2 id="pickerTitle">Choose camera</h2><label for="pickerCamera">Camera</label><select id="pickerCamera"></select><div><button class="btn btn-primary" id="pickerApply">Use camera</button><button class="btn" id="pickerCancel">Cancel</button></div></div></div>
+      <section id="focusAudio" class="focus-audio" aria-label="Fullscreen audio waveform" hidden><label for="focusAudioSource">Waveform source</label><select id="focusAudioSource"></select><canvas id="focusWaveform" width="480" height="64" tabindex="0" aria-label="Audio waveform; click to seek or use left and right arrow keys"></canvas><p id="focusAudioStatus" role="status"></p><button class="btn" id="focusAudioListen">Listen to source</button><small>Spikes are possible impacts, not proof of an edge.</small></section>
+      <div id="replayTransport" class="transport-dock">
+        <div class="timeline-label"><label for="replayPosition">Replay timeline</label><output id="replayTime">0.00 s</output><button class="btn" id="exitFocus" hidden>Exit fullscreen</button></div>
+        <input id="replayPosition" type="range" min="0" max="60000" value="0" step="1" aria-label="Replay timeline">
+        <div class="transport-buttons"><button class="btn btn-primary" id="replayPlay">Play</button><button class="btn" id="replayPause">Pause</button><button class="btn" data-replay-step="-500">−0.5 s</button><button class="btn" data-replay-step="500">+0.5 s</button><button class="btn" data-replay-step="-33.333">−1/30 s</button><button class="btn" data-replay-step="33.333">+1/30 s</button><button class="btn" id="replayRestart">Restart</button><label>Speed <select id="replaySpeed"><option value=".25">0.25×</option><option value=".5">0.5×</option><option value="1" selected>1×</option></select></label></div>
+      </div>
+    </section>
+    <div class="dashboard-grid">
+      <section id="cameraGrid" class="camera-grid" aria-label="Connected camera wall">
+        <div class="panel empty-grid">
+          <div><div class="camera-icon" aria-hidden="true"></div><h2>Waiting for cameras</h2><p>Open the camera address on a phone connected to this Wi-Fi.</p></div>
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <section class="panel side-panel">
+          <p class="eyebrow">Local network</p><h2>Connect a camera</h2>
+          <label>QR address <select id="qrAddress" aria-label="Camera QR address"></select></label><img id="cameraQR" src="/api/camera-qr" width="220" height="220" alt="Scan to open the camera page on this Wi-Fi"><p id="qrNote">Choose the address of your Wi-Fi adapter. HTTPS certificate trust is still required.</p><div id="cameraUrls" class="server-links"><!-- CAMERA_URLS --></div>
+<p id="sleepStatus" class="muted" role="status">Checking server sleep protection…</p>
+          <p style="font-size:12px">Tap a link or enter it in a phone browser on the same Wi-Fi network.</p>
+          <button id="copyButton" class="btn" type="button">Copy address</button>
+          <a id="certificateLink" class="certificate-link" href="/local-ca.crt">Install phone security certificate</a>
+        </section>
+
+        <section class="panel side-panel">
+          <p class="eyebrow">System status</p><h2>Connected devices</h2>
+          <div class="stats-strip" style="margin-top:14px">
+            <div class="stat"><div id="onlineStat" class="stat-value">0</div><div class="stat-label">Online</div></div>
+            <div class="stat"><div id="roleStat" class="stat-value">0</div><div class="stat-label">Roles</div></div>
+            <div class="stat"><div class="stat-value">LAN</div><div class="stat-label">Network</div></div>
+          </div>
+          <div id="deviceList" class="device-list"><p>No connected devices.</p></div>
+        </section>
+
+        <section class="panel side-panel">
+          <p class="eyebrow">Live media status</p><h2>Review desk 0.15.2</h2>
+          <p style="font-size:12px">Live video and timestamped replay clips stay on your local network. The rolling buffer retains about 90 seconds; open reviews temporarily pin footage.</p>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <div id="editModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+    <form id="editForm" class="panel modal-card">
+      <p class="eyebrow">Device settings</p><h2 id="editTitle">Edit camera</h2>
+      <input id="editDeviceId" type="hidden">
+      <div class="field" style="margin-top:18px"><label for="editName">Name</label><input id="editName" required maxlength="48"></div>
+      <div class="field" style="margin-top:14px"><label for="editRole">Role</label><select id="editRole"><option value="UMPIRE_POV">Umpire POV</option><option value="CREASE_LEFT">Crease left</option><option value="CREASE_RIGHT">Crease right</option><option value="WICKET_MIC">Wicket microphone</option><option value="OTHER">Other angle</option></select></div>
+      <div class="modal-actions"><button id="cancelEdit" class="btn" type="button">Cancel</button><button class="btn btn-primary" type="submit">Save</button></div>
+    </form>
+  </div>
+  <div id="toast" class="toast" role="status"></div>
+  <script defer src="/static/common.js?v=0.15.2"></script>
+  <script defer src="/static/view-controls.js?v=0.15.2"></script><script defer src="/static/live-inspect.js?v=0.15.2"></script><script defer src="/static/umpire.js?v=0.15.2"></script>
+<script defer src="/static/replay-engine.js?v=0.15.2"></script><script defer src="/static/replay.js?v=0.15.2"></script>
+<script defer src="/static/ball-detector.js?v=0.15.2"></script><script defer src="/static/review-desk.js?v=0.15.2"></script><script defer src="/static/assistance.js?v=0.15.2"></script></body>
+</html>
