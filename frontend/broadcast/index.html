@@ -1,1 +1,22 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#000"><title>Backyard Cricket · Broadcast output</title><link rel="stylesheet" href="/broadcast.css"></head><body><main><video id="program" autoplay playsinline muted></video><div id="empty"><strong>Waiting for a DRS camera</strong><span>Connect a camera, then select it above.</span></div><iframe id="graphic" src="/overlay" title="Scoreboard overlay"></iframe></main><form id="controls"><label>Program camera <select id="camera"><option value="">Waiting for cameras…</option></select></label><label class="check"><input id="showGraphic" type="checkbox" checked> Scoreboard</label><button id="mute" type="button">Enable camera audio</button><span id="status">Connecting…</span></form><script src="/static/common.js"></script><script src="/broadcast.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#000"><title>Backyard Cricket · Broadcast output</title><link rel="stylesheet" href="/broadcast.css?v=1.1.0"></head>
+<body>
+<main>
+  <video id="program" autoplay playsinline muted aria-label="Live DRS program camera"></video>
+  <div id="bufferedStage"></div>
+  <div id="empty"><strong>Waiting for a DRS camera</strong><span>Keep Studio running and connect a device through its camera page.</span></div>
+  <iframe id="graphic" src="/overlay" title="Scoreboard overlay"></iframe>
+</main>
+<form id="controls" aria-label="Broadcast controls">
+  <label>Program camera <select id="camera" aria-label="Program camera"><option value="">Waiting for cameras…</option></select></label>
+  <label class="check"><input id="showGraphic" type="checkbox" checked> Scoreboard</label>
+  <button id="retry" type="button">Retry video</button>
+  <button id="mute" type="button">Mute camera audio</button>
+  <span id="sound" role="status">Camera microphone off / not received</span>
+  <button id="copyOutput" type="button">Copy clean OBS link</button>
+  <span id="status" role="status">Connecting…</span>
+</form>
+<button id="audioNotice" type="button" hidden>Enable camera audio · browser blocked autoplay with sound</button>
+<script src="/static/common.js"></script><script src="/static/replay-engine.js?v=1.1.0"></script><script src="/broadcast-assets/buffered-broadcast.js?v=1.1.0"></script><script src="/broadcast.js?v=1.1.0"></script>
+</body></html>

@@ -246,3 +246,104 @@ def test_broadcast_http_actions(tmp_path):
         assert data['score']['color1']==DEFAULT['color2']
         assert data['graphics']['innings'][0]['runs']==12
         assert client.post('/api/scoreboard/broadcast/action',json={'action':'show','kind':'run_chart','innings':'bad'}).status_code==400
+
+
+def test_manual_graphics_hold_and_automatic_graphics_cannot_preempt():
+    engine=BroadcastGraphics()
+    s=scoreboard(runs='20',overs='1.5')
+    observe(engine,s)
+    engine.configure({'total_overs':4})
+    engine.show('run_chart',101)
+    s.update(overs='2.0',runs='21')
+    assert observe(engine,s,102)['active']['kind']=='run_chart'
+    assert engine.snapshot(s,10000)['active']['until'] is None
+    engine.end_innings(10001)
+    assert engine.active['kind']=='run_chart'
+    engine.action({'action':'show','kind':'power_surge'},s,10002)
+    assert engine.snapshot(s,10003)['power_surge']
+    engine.action({'action':'hide'},s,10004)
+    assert engine.active is None and not engine.power_surge
+    assert engine.phase=='innings_break', 'Reopen scoreboard must not undo the match phase'
+
+
+def test_wicket_panel_calculates_complete_shots_and_corrects_dismissal():
+    engine=BroadcastGraphics()
+    s=scoreboard(batter1_name='Ali',batter1_runs='0',batter1_balls='0',batter2_name='Bo')
+    observe(engine,s)
+    for i,(runs,tokens) in enumerate([(0,'0'),(4,'0 4'),(10,'0 4 6')],1):
+        s.update(runs=str(runs),overs=f'0.{i}',batter1_runs=str(runs),batter1_balls=str(i),deliveries=tokens)
+        observe(engine,s,100+i*2)
+    s.update(wickets='1',overs='0.4',batter1_balls='4',deliveries='0 4 6 W')
+    observe(engine,s,108)
+    s.update(batter1_name='Cam',batter1_runs='0',batter1_balls='0')
+    data=observe(engine,s,110)
+    assert data['active']['kind']=='wicket_card'
+    row=data['innings'][0]['last_wicket']
+    assert (row['dots'],row['scoring_shots'],row['fours'],row['sixes'],row['strike_rate'])==(2,2,1,1,250)
+    assert row['dismissal']=='Out'
+    engine.action({'action':'wicket_details','innings':0,'name':'Ali','dismissal':'c Bo b Dee','show':True},s,111)
+    assert engine.snapshot(s,1000)['innings'][0]['last_wicket']['dismissal']=='c Bo b Dee'
+    assert engine.active['until'] is None
+    with pytest.raises(ValueError):engine.wicket_details({'name':'Ali','dismissal':True})
+    partial=engine.batter_stats({'name':'X','runs':14,'balls':12,'dismissal':'b Dee','shots':{}})
+    assert partial['dots'] is None and partial['fours'] is None
+    assert partial['strike_rate']==117
+
+
+def test_partnership_includes_extras_resets_at_wicket_and_accepts_corrections():
+    engine=BroadcastGraphics();s=scoreboard()
+    observe(engine,s)
+    s.update(runs='12',overs='1.0');stats=observe(engine,s,102)['innings'][0]
+    assert (stats['partnership_runs'],stats['partnership_balls'])==(12,6)
+    s.update(runs='13');stats=observe(engine,s,104)['innings'][0]
+    assert (stats['partnership_runs'],stats['partnership_balls'])==(13,6)
+    s.update(wickets='1',overs='1.1');observe(engine,s,106)
+    s.update(runs='17',overs='1.2');stats=observe(engine,s,108)['innings'][0]
+    assert (stats['partnership_runs'],stats['partnership_balls'])==(4,1)
+    engine.edit_stats({'innings':0,'partnership_runs':7,'partnership_balls':3})
+    s.update(runs='19',overs='1.3');stats=observe(engine,s,110)['innings'][0]
+    assert (stats['partnership_runs'],stats['partnership_balls'])==(9,4)
+    s.update(wickets='2',overs='1.4');stats=observe(engine,s,112)['innings'][0]
+    assert (stats['partnership_runs'],stats['partnership_balls'])==(0,0)
+
+
+def test_late_chase_favours_equation_and_rates_and_boundaries_have_cooldown():
+    engine=BroadcastGraphics();engine.random.seed(123)
+    engine.configure({'rotation_mode':'automatic','interval_seconds':5})
+    observe(engine,scoreboard(runs='180',overs='20.0'))
+    s=scoreboard(team1='Creek',team2='Pavilion')
+    observe(engine,s,102)
+    s.update(runs='140',overs='16.0',wickets='2',deliveries='4')
+    observe(engine,s,104)
+    kinds=[engine.snapshot(s,200+n*5)['strip']['kind'] for n in range(100)]
+    assert sum(k in ('chase','rates') for k in kinds)>=85
+    candidates={c['kind']:c['text'] for c in engine.candidates(s)}
+    assert candidates['chase']=='Creek needs 41 runs from 24 balls'
+    assert candidates['rates']=='RUN RATE 8.75   REQUIRED RUN RATE 10.25'
+    engine.priority='boundaries';engine.next_strip_at=0;engine.last_boundary_strip=-100
+    assert engine.snapshot(s,1000)['strip']['kind']=='boundaries'
+    engine.priority='boundaries';engine.next_strip_at=0
+    assert engine.snapshot(s,1005)['strip']['kind']!='boundaries'
+
+
+def test_program_history_matches_delayed_picture_and_excludes_receiver_logs(tmp_path):
+    state=State(tmp_path)
+    with patch('server.scoreboard_state.time.time',return_value=100):
+        state.save(scoreboard(runs='10',overs='1.0'));state.flush();state.snapshot()
+    with patch('server.scoreboard_state.time.time',return_value=105):
+        state.save({'runs':'14'});state.flush();state.snapshot()
+        old=state.program_snapshot(100)
+        assert old['score']['runs']=='10'
+        assert 'logs' not in old and 'status' not in old
+        assert state.program_snapshot(99)['score']['visible'] is False
+        assert state.program_snapshot(105)['score']['runs']=='14'
+
+
+def test_program_http_rejects_stale_and_invalid_timestamps(tmp_path):
+    state=State(tmp_path/'scores')
+    with patch('server.main.start_receiver'),patch('server.scoreboard_state.time.time',return_value=100),TestClient(create_app(Settings(database_path=tmp_path/'test.db'),scoreboard=state)) as c:
+        state.save(scoreboard(runs='10',overs='1.0'));state.flush()
+        c.get('/api/scoreboard/state')
+        assert c.get('/api/scoreboard/program-state?at=100').json()['score']['runs']=='10'
+        for at in ('nan','inf','64','102'):
+            assert c.get('/api/scoreboard/program-state?at='+at).status_code==422

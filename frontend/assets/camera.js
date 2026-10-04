@@ -18,6 +18,69 @@ let mediaBusy=false;
 let intentionalDisconnect = false;
 let rollingRecorder = null;
 let recordingGeneration = 0;
+let microphoneBusy = false;
+const watchedMicrophones = new WeakSet();
+
+function liveMicrophones() {
+  return previewStream?.getAudioTracks().filter(track => track.readyState === 'live' && track.enabled !== false) || [];
+}
+function publishMicrophone() {
+  const enabled = liveMicrophones().length > 0;
+  document.querySelector('#microphone').value = String(enabled);
+  if (socket?.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({type: 'media_changed', microphone: enabled}));
+    startReplayRecording();
+  }
+}
+function watchMicrophones(stream) {
+  for (const track of stream.getAudioTracks()) {
+    if (watchedMicrophones.has(track)) continue;
+    watchedMicrophones.add(track);
+    track.addEventListener('ended', () => {
+      if (previewStream !== stream) return;
+      stream.removeTrack(track);
+      publishMicrophone();
+      document.querySelector('#audioStatus').textContent = 'Microphone ended — enable it again to restore camera sound.';
+    });
+  }
+}
+function adoptMicrophone(microphone) {
+  if (!previewStream?.active) return false;
+  for (const track of previewStream.getAudioTracks()) {
+    if (track.readyState !== 'live') previewStream.removeTrack(track);
+  }
+  rollingRecorder?.stop();
+  for (const track of microphone.getAudioTracks()) previewStream.addTrack(track);
+  watchMicrophones(previewStream);
+  publishMicrophone();
+  return true;
+}
+async function syncMicrophone() {
+  if (!previewStream?.active) return;
+  const enabled = document.querySelector('#microphone').value === 'true';
+  if (enabled === (liveMicrophones().length > 0)) return;
+  if (microphoneBusy) throw Error('Microphone is opening — please wait');
+  microphoneBusy = true;
+  document.querySelector('#microphone').disabled = true;
+  const stream = previewStream;
+  try {
+    if (enabled) {
+      const microphone = await navigator.mediaDevices.getUserMedia({video: false,
+        audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false}});
+      if (previewStream !== stream || !adoptMicrophone(microphone)) microphone.getTracks().forEach(track => track.stop());
+    } else {
+      stopAudio?.(); stopAudio = null;
+      rollingRecorder?.stop();
+      for (const track of stream.getAudioTracks()) { track.stop(); stream.removeTrack(track); }
+      publishMicrophone();
+      document.querySelector('#audioStatus').textContent = 'Camera microphone disabled.';
+    }
+  } finally {
+    microphoneBusy = false;
+    document.querySelector('#microphone').disabled = false;
+    document.querySelector('#microphone').value = String(liveMicrophones().length > 0);
+  }
+}
 
 const deviceId = localStorage.getItem("drs_device_id") || createClientId();
 localStorage.setItem("drs_device_id", deviceId);
@@ -52,7 +115,7 @@ function selectedConstraints() {
 }
 
 async function ensureMedia() {
-  if (previewStream?.active) return previewStream;
+  if (previewStream?.active) { await syncMicrophone(); return previewStream; }
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error("Camera access requires trusted HTTPS on this phone");
   }
@@ -64,6 +127,7 @@ async function ensureMedia() {
     await refreshCameraDevices(raw.getVideoTracks()[0]?.getSettings?.().deviceId);
     optics=await window.DRSOptics.create(raw,document.querySelector('#cameraZoom'),document.querySelector('#zoomStatus'));
     previewStream=optics.stream;
+    watchMicrophones(previewStream);
   } catch(e){throw Error(e.name==='OverconstrainedError'?'Selected camera unavailable. Choose the other camera.':e.message);}
   finally{mediaBusy=false;const locked=socket?.readyState===WebSocket.OPEN||socket?.readyState===WebSocket.CONNECTING;document.querySelector('#cameraFacing').disabled=locked;document.querySelector('#cameraDevice').disabled=locked;}
   preview.srcObject = previewStream;
@@ -103,39 +167,46 @@ async function handleSignal(message) {
     if (peer) peer.close();
     peer = new RTCPeerConnection({ iceServers: [] });
     peer.pendingCandidates = [];
+    peer.signalSession = typeof signal.session_id === 'string' ? signal.session_id : '';
     peerConnections.set(consoleId, peer);
     const stream = await ensureMedia();
+    if (peerConnections.get(consoleId) !== peer) return;
     for (const track of stream.getTracks()) peer.addTrack(track, stream);
     peer.addEventListener("icecandidate", event => {
-      if (event.candidate && socket?.readyState === WebSocket.OPEN) {
+      if (event.candidate && peerConnections.get(consoleId) === peer && socket?.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({
           type: "webrtc_signal",
           console_id: consoleId,
-          signal: { candidate: event.candidate.toJSON() },
+          signal: { candidate: event.candidate.toJSON(), ...(peer.signalSession ? {session_id: peer.signalSession} : {}) },
         }));
       }
     });
     peer.addEventListener("connectionstatechange", () => {
+      if (peerConnections.get(consoleId) !== peer) return;
       document.querySelector("#streamStatusValue").textContent = peer.connectionState.toUpperCase();
       if (["failed", "closed"].includes(peer.connectionState)) {
         peerConnections.delete(consoleId);
       }
     });
     await peer.setRemoteDescription(signal.description);
+    if (peerConnections.get(consoleId) !== peer) return;
     for (const candidate of peer.pendingCandidates.splice(0)) {
       await peer.addIceCandidate(candidate);
     }
     const answer = await peer.createAnswer();
+    if (peerConnections.get(consoleId) !== peer) return;
     await peer.setLocalDescription(answer);
+    if (peerConnections.get(consoleId) !== peer || socket?.readyState !== WebSocket.OPEN) return;
     socket.send(JSON.stringify({
       type: "webrtc_signal",
       console_id: consoleId,
-      signal: { description: peer.localDescription },
+      signal: { description: peer.localDescription, ...(peer.signalSession ? {session_id: peer.signalSession} : {}) },
     }));
     return;
   }
 
   if (signal.candidate && peer) {
+    if (signal.session_id && signal.session_id !== peer.signalSession) return;
     try {
       if (peer.remoteDescription) await peer.addIceCandidate(signal.candidate);
       else peer.pendingCandidates.push(signal.candidate);
@@ -170,7 +241,7 @@ async function connect() {
       settings: {
         resolution: `${videoSettings.width || "?"}x${videoSettings.height || "?"}`,
         fps: videoSettings.frameRate || Number(document.querySelector("#fps").value),
-        microphone: previewStream.getAudioTracks().length > 0,
+        microphone: liveMicrophones().length > 0,
       },
       capabilities: {
         secure_context: window.isSecureContext,
@@ -268,20 +339,19 @@ function startReplayRecording() {
   } catch(e) { panel.textContent = 'Replay startup failed: ' + e.message; }
 }
 document.querySelector('#retryRecording').addEventListener('click',startReplayRecording);
+document.querySelector('#microphone').addEventListener('change', () => {
+  syncMicrophone().catch(error => {
+    document.querySelector('#audioStatus').textContent = 'Microphone: ' + error.message;
+    showToast('Microphone: ' + error.message);
+  });
+});
 
 let stopAudio=null;
 document.getElementById('enableAudio').onclick=async()=>{
  const status=document.getElementById('audioStatus'),button=document.getElementById('enableAudio');button.disabled=true;
  try{
   stopAudio?.();stopAudio=null;
-  stopAudio=await window.DRSAudioStart(previewStream,deviceId,()=>rollingRecorder?.clock,text=>status.textContent=text,mic=>{
-   if(previewStream){
-    rollingRecorder?.stop();
-    previewStream.getAudioTracks().filter(t=>t.readyState!=='live').forEach(t=>previewStream.removeTrack(t));
-    mic.getAudioTracks().forEach(t=>previewStream.addTrack(t));
-    if(socket?.readyState===WebSocket.OPEN)startReplayRecording();
-   }
-  });
+  stopAudio=await window.DRSAudioStart(previewStream,deviceId,()=>rollingRecorder?.clock,text=>status.textContent=text,adoptMicrophone);
  }catch(e){status.textContent='Microphone: '+e.message;}finally{button.disabled=false;}
 };
 document.getElementById('stopAudio').onclick=()=>{stopAudio?.();stopAudio=null;document.getElementById('audioStatus').textContent='Analysis stopped';};

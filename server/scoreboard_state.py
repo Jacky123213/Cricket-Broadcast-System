@@ -63,6 +63,7 @@ class State:
         self.last_score = None
         self.count = 0
         self.logs = deque(maxlen=100)
+        self.program_history = deque(maxlen=400)
         self.error = ''
         self.teams = {}
         self.graphics = BroadcastGraphics()
@@ -116,11 +117,30 @@ class State:
             self.graphics.flush(now)
             graphics = self.graphics.snapshot(self.data, now)
             self._save_graphics()
-            return dict(score=copy.deepcopy(self.data), status=self.status,
+            result = dict(score=copy.deepcopy(self.data), status=self.status,
                         last_packet=self.last_packet, last_score=self.last_score,
                         packet_count=self.count, logs=list(self.logs), error=self.error,
                         server_time=now, graphics=graphics,
                         team_appearance=[{'name': p['name'], 'color': p['color']} for p in self.teams.values()])
+            # Keep playout history in memory only; never include receiver logs.
+            program = {k: result[k] for k in ('score','graphics','last_score','server_time')}
+            if not self.program_history or now-self.program_history[-1]['server_time'] >= .1:
+                self.program_history.append(copy.deepcopy(program))
+            while self.program_history and now-self.program_history[0]['server_time'] > 35:
+                self.program_history.popleft()
+            return result
+
+    def program_snapshot(self, at):
+        with self.lock:
+            current = self.snapshot()
+            frame = next((item for item in reversed(self.program_history) if item['server_time'] <= at), None)
+            if frame: return copy.deepcopy(frame)
+            # Do not display present-time scores over footage older than our history.
+            current = {k:current[k] for k in ('score','graphics','last_score','server_time')}
+            current['score']['visible'] = False
+            current['graphics']['active'] = None
+            current['graphics']['power_surge'] = False
+            return current
 
     def _team_appearance(self, updated, changes):
         """Resolve role slots from persistent team identities, including split BLE writes."""

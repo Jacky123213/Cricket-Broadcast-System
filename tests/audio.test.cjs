@@ -14,3 +14,8 @@ test('audio unlock precedes microphone permission; silent graph and local diagno
 test('existing camera microphone is reused and not stopped by analysis cleanup',async()=>{
  const {c,calls,stream}=setup(true);const stop=await c.window.DRSAudioStart(stream,'p',()=>null,()=>{});stop();assert.ok(!calls.includes('permission'));assert.ok(!calls.includes('stop-track'));
 });
+test('microphone adopted by the camera survives analysis cleanup for live sound and replay',async()=>{
+ const {c,calls}=setup(false);let adopted=false;
+ const stop=await c.window.DRSAudioStart(null,'p',()=>null,()=>{},async()=>{adopted=true;return true;});
+ assert.equal(adopted,true);stop();assert.ok(!calls.includes('stop-track'));
+});

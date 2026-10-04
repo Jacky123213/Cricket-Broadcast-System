@@ -1,6 +1,6 @@
 # Cricket Broadcast System
 
-Current release: **1.0.2** · Scoreboard graphics **0.3.2** · DRS engine **0.15.2**.
+Current release: **1.1.0** · Scoreboard graphics **0.4.0** · DRS engine **0.15.2**.
 
 Backyard Cricket Studio combines **Backyard DRS Replay Studio 0.15.2** and **Backyard Scoreboard 0.2** into one local Windows application.
 
@@ -15,10 +15,11 @@ The PC runs a native desktop window with Replay Studio, Scoreboard, Settings and
 - Physical camera dropdown after permission, with Apple, Android and Chromium-friendly selection.
 - Raspberry Pi browser-camera support; documented ESP32/Arduino live-source limits.
 - OBS-ready transparent overlay at `/overlay`.
+- Five-second buffered DRS camera video, microphone sound and time-matched graphics at `/broadcast`, with a clean OBS link. The umpire view remains live.
 - LAN HTTPS overlay URLs for a separate OBS PC, sharing the umpire/camera certificate.
 - Team-owned colours and logos that follow batting/bowling changes, including Bluetooth team-name updates.
-- Shared rotating information strip: main text, attendance, head-to-head, last wicket, boundaries, projections and result.
-- Runs-per-over chart, drinks batting card, innings-break graphic and timed match summary in custom team colours.
+- Shared rotating information strip: main text, attendance, head-to-head, last wicket, partnership, occasional boundaries, combined projections, chase equation/rates and result.
+- Runs-per-over chart, drinks batting card, innings-break graphic, match summary, wicket panel and manual Power Surge in team colours. Manual graphics stay on air until reopened/hidden.
 - Recorded innings history and a statistics editor for details missing from the Bluetooth feed.
 
 ## Windows install
@@ -45,7 +46,9 @@ ESP32-CAM and typical Arduino camera boards usually expose MJPEG/JPEG rather tha
 
 ## Overlay + replay workflow
 
-Keep the umpire camera connected to DRS. Use that live camera as the production video source and place the `/overlay` browser source above it in OBS. The same local server drives both systems; the graphics are intentionally a separate transparent layer so replay recording does not burn the score into the footage.
+Keep the umpire camera connected with its replay recorder running. Open `/broadcast`, select the program camera and copy its clean OBS link. This plays native recorded video and its microphone sound about five seconds behind, with graphics matched to the displayed clip timestamp. The umpire view is still live. Sound is requested by default; if your browser blocks autoplay, click **Enable camera audio** (in OBS, use **Interact**). The camera microphone can be enabled while connected; the change reaches broadcast after the buffer delay.
+
+Alternatively, place `/overlay` above a separate video/audio source in OBS. `/overlay` is graphics-only and has no camera sound. Graphics are not burned into DRS replay recordings. See [OVERLAY_GUIDE.md](OVERLAY_GUIDE.md) for the separate-PC workflow and audio setup.
 
 ## Development
 
@@ -59,11 +62,11 @@ Runtime data, certificates, logs, local environments and replay buffers are excl
 
 No licence is provided at present. Public availability does not grant an open-source licence; a licence can be added later.
 
-See [RELEASE_1_0_2.md](RELEASE_1_0_2.md) for this release's changes and upgrade instructions.
+See [RELEASE_1_1_0.md](RELEASE_1_1_0.md) for this release's changes and upgrade instructions.
 
 ## Broadcast graphics
 
-See [OVERLAY_GUIDE.md](OVERLAY_GUIDE.md) for information strip controls, the four graphics, automatic triggers, match setup and statistics corrections. Existing installs can restart Studio and refresh their overlay source; no additional runtime packages are needed for this upgrade.
+See [OVERLAY_GUIDE.md](OVERLAY_GUIDE.md) for information strip controls, six graphics, automatic triggers, wicket details and statistics corrections. Existing installs can restart Studio and refresh camera/OBS pages; no additional runtime packages are needed for this upgrade.
 
 ## Current limits
 

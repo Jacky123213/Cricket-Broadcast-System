@@ -22,11 +22,12 @@ test('independent recording uploads measured interval and stops without restarti
    stop(){this.state='inactive';this.ondataavailable({data:new Blob(['encoded'])});this.onstop();}
  }
  c.MediaRecorder=Recorder;c.window.MediaRecorder=Recorder;
- const rec=new c.window.DRSRecorder('phone',{getVideoTracks:()=>[{getSettings:()=>({frameRate:30})}]},()=>{});
+ const rec=new c.window.DRSRecorder('phone',{getVideoTracks:()=>[{getSettings:()=>({frameRate:30})}],getAudioTracks:()=>[{readyState:'live'}]},()=>{});
  rec.clock.sync=async()=>{rec.clock.checked=100000;rec.clock.offset=500;rec.clock.uncertainty=3;};
  await rec.start();t=4900;rec.stop();await new Promise(r=>setImmediate(r));
  assert.equal(uploads.length,1);const url=new URL(uploads[0].url,'http://local');
  assert.equal(url.searchParams.get('start_ms'),'100500');assert.equal(url.searchParams.get('end_ms'),'105400');assert.equal(rec.running,false);
+ assert.equal(url.searchParams.get('audio'),'true');
  assert.equal(await uploads[0].options.body.text(),'encoded');
 });
 test('clock remains finite without performance.timeOrigin',async()=>{

@@ -59,7 +59,7 @@
       let recorder;
       try {recorder=new MediaRecorder(this.stream,{mimeType:this.mime,videoBitsPerSecond:bitrate});}
       catch(e){this.report('Encoder unavailable: '+e.message);this.nextTimer=setTimeout(()=>this.next(),1000);return;}
-      const entry={recorder,start,end:start,chunks:[],offset,error};this.records.add(entry);
+      const entry={recorder,start,end:start,chunks:[],offset,error,audio:this.stream.getAudioTracks?.().some(t=>t.readyState==='live'&&t.enabled!==false)||false};this.records.add(entry);
       recorder.ondataavailable=e=>{if(e.data.size)entry.chunks.push(e.data);};
       recorder.onerror=()=>{this.report('Encoder error — reconnect camera');this.stop();};
       recorder.onstop=()=>{
@@ -89,7 +89,7 @@
       this.pending++;
       try {
         const fps=this.stream.getVideoTracks()[0].getSettings().frameRate||30;
-        const params=new URLSearchParams({start_ms:e.start,end_ms:e.end,uncertainty_ms:e.error,offset_ms:e.offset,fps});
+        const params=new URLSearchParams({start_ms:e.start,end_ms:e.end,uncertainty_ms:e.error,offset_ms:e.offset,fps,audio:e.audio});
         const response=await timedFetch('/api/clips/'+encodeURIComponent(this.id)+'?'+params,{method:'POST',headers:{'Content-Type':this.mime},body:blob},12000);
         if(!response.ok)throw Error('Upload HTTP '+response.status);
         this.report('Buffer active · overlapping clips · offset '+e.offset.toFixed(1)+' ms · network ±'+e.error.toFixed(1)+' ms');

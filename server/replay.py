@@ -91,7 +91,7 @@ class ReplayStore:
 
         @router.post('/clips/{device_id}')
         async def upload(device_id: str, request: Request, start_ms: float, end_ms: float,
-                         uncertainty_ms: float, fps: float = 30, offset_ms: float = 0):
+                         uncertainty_ms: float, fps: float = 30, offset_ms: float = 0, audio: bool = False):
             if len(device_id) > 80 or not all(math.isfinite(v) for v in (start_ms,end_ms,uncertainty_ms,fps,offset_ms)):
                 raise HTTPException(422, 'Invalid clip metadata')
             if not 0 < end_ms-start_ms <= 15000 or not 0 <= uncertainty_ms <= 5000 or not 1 <= fps <= 120:
@@ -116,7 +116,7 @@ class ReplayStore:
                 path = self.root / (key + '.clip')
                 await asyncio.to_thread(path.write_bytes, body)
                 self.clips[key] = dict(id=key,device_id=device_id,start_ms=start_ms,end_ms=end_ms,
-                    uncertainty_ms=uncertainty_ms,offset_ms=offset_ms,fps=fps,mime=mime,bytes=len(body),url=f'/api/clips/{key}')
+                    uncertainty_ms=uncertainty_ms,offset_ms=offset_ms,fps=fps,mime=mime,bytes=len(body),audio=audio,url=f'/api/clips/{key}')
             return {'id': key}
 
         @router.get('/clips/{key}')
@@ -144,6 +144,17 @@ class ReplayStore:
                     row['seconds']=sum(b-a for a,b in intervals)/1000
                 meters={k:v[-1] for k,v in self.audio.items() if v and now_ms()-v[-1]['t']<3000}
                 return {'audio':meters,'server_ms':now_ms(),'cameras':cameras,'recorders':self.recorder_status,'bytes':sum(c['bytes'] for c in self.clips.values())}
+
+        @router.get('/broadcast/camera/{device_id}')
+        async def broadcast_camera(device_id: str):
+            if len(device_id) > 80: raise HTTPException(422, 'Invalid camera')
+            async with self.lock:
+                current = now_ms()
+                clips = sorted([dict(c) for c in self.clips.values()
+                                if c['device_id'] == device_id and c['end_ms'] > current-30000],
+                               key=lambda c:c['start_ms'])
+                return {'server_ms':current, 'clips':clips,
+                        'recorder':self.recorder_status.get(device_id)}
 
         @router.post('/replays')
         async def review(seconds: int = 60, start_ms: float | None = None, end_ms: float | None = None):

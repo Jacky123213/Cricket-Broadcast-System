@@ -16,8 +16,8 @@ let primaryCameraUrl = "";
 
 function closePeer(deviceId) {
   const peer = peers.get(deviceId);
-  if (peer) peer.close();
   peers.delete(deviceId);
+  if (peer) peer.close();
 }
 
 function setStreamState(deviceId, label, connected = false) {
@@ -30,59 +30,77 @@ function setStreamState(deviceId, label, connected = false) {
 
 async function acceptSignal(deviceId, signal) {
   const peer = peers.get(deviceId);
-  if (!peer) return;
-  if (signal.description) {
-    await peer.setRemoteDescription(signal.description);
-    for (const candidate of peer.pendingCandidates.splice(0)) {
-      await peer.addIceCandidate(candidate);
+  if (!peer || (signal.session_id && signal.session_id !== peer.signalSession)) return;
+  peer.signals = peer.signals.then(async () => {
+    if (peers.get(deviceId) !== peer) return;
+    if (signal.description) {
+      if (signal.description.type !== 'answer' || peer.remoteDescription) return;
+      await peer.setRemoteDescription(signal.description);
+      if (peers.get(deviceId) !== peer) return;
+      for (const candidate of peer.pendingCandidates.splice(0)) await peer.addIceCandidate(candidate);
+    } else if (signal.candidate) {
+      if (peer.remoteDescription) await peer.addIceCandidate(signal.candidate);
+      else peer.pendingCandidates.push(signal.candidate);
     }
-    return;
-  }
-  if (signal.candidate) {
-    if (peer.remoteDescription) await peer.addIceCandidate(signal.candidate);
-    else peer.pendingCandidates.push(signal.candidate);
-  }
+  }).catch(error => {
+    if (peers.get(deviceId) === peer) closePeer(deviceId);
+    throw error;
+  });
+  return peer.signals;
 }
 
 async function startPeer(device) {
   if (peers.has(device.device_id) || socket?.readyState !== WebSocket.OPEN) return;
   const peer = new RTCPeerConnection({ iceServers: [] });
   peer.pendingCandidates = [];
+  peer.outgoingCandidates = [];
+  peer.offerSent = false;
+  peer.signals = Promise.resolve();
+  peer.signalSession = createClientId();
+  peer.mediaRevision = device.settings?.media_revision || 0;
+  peer.microphone = Boolean(device.settings?.microphone);
+  peer.stream = new MediaStream();
   peers.set(device.device_id, peer);
   setStreamState(device.device_id, "NEGOTIATING");
 
   peer.addTransceiver("video", { direction: "recvonly" });
-  if (device.settings?.microphone) peer.addTransceiver("audio", { direction: "recvonly" });
+  peer.addTransceiver("audio", { direction: "recvonly" });
+  const send = signal => {
+    if (peers.get(device.device_id) !== peer || socket?.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({type: 'webrtc_signal', device_id: device.device_id,
+      signal: {...signal, session_id: peer.signalSession}}));
+  };
   peer.addEventListener("track", event => {
+    if (peers.get(device.device_id) !== peer) return;
     const video = [...document.querySelectorAll("[data-video-id]")]
       .find(item => item.dataset.videoId === device.device_id);
     if (!video) return;
-    video.srcObject = event.streams[0] || new MediaStream([event.track]);
+    for (const track of event.streams?.[0]?.getTracks() || [event.track]) {
+      if (!peer.stream.getTracks().some(existing => existing.id === track.id)) peer.stream.addTrack(track);
+    }
+    if (video.srcObject !== peer.stream) video.srcObject = peer.stream;
     video.hidden = false;
     video.play().catch(() => undefined);
   });
   peer.addEventListener("icecandidate", event => {
-    if (event.candidate && socket?.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({
-        type: "webrtc_signal",
-        device_id: device.device_id,
-        signal: { candidate: event.candidate.toJSON() },
-      }));
-    }
+    if (!event.candidate || peers.get(device.device_id) !== peer) return;
+    if (peer.offerSent) send({candidate: event.candidate.toJSON()});
+    else peer.outgoingCandidates.push(event.candidate.toJSON());
   });
   peer.addEventListener("connectionstatechange", () => {
+    if (peers.get(device.device_id) !== peer) return;
     const state = peer.connectionState;
     setStreamState(device.device_id, state === "connected" ? "VIDEO LIVE" : state.toUpperCase(), state === "connected");
     if (["failed", "closed"].includes(state)) closePeer(device.device_id);
   });
 
   const offer = await peer.createOffer();
+  if (peers.get(device.device_id) !== peer) return;
   await peer.setLocalDescription(offer);
-  socket.send(JSON.stringify({
-    type: "webrtc_signal",
-    device_id: device.device_id,
-    signal: { description: peer.localDescription },
-  }));
+  if (peers.get(device.device_id) !== peer) return;
+  send({description: peer.localDescription});
+  peer.offerSent = true;
+  for (const candidate of peer.outgoingCandidates.splice(0)) send({candidate});
 }
 
 function cameraTile(device) {
@@ -131,6 +149,9 @@ function render() {
     }
     tile.querySelector(".camera-name").textContent = device.name;
     tile.querySelector(".camera-role").textContent = `${formatRole(device.role)} · ${device.settings?.resolution || "AUTO"} · ${device.settings?.fps || "—"} FPS`;
+    const peer = peers.get(device.device_id);
+    if (peer && (peer.mediaRevision !== (device.settings?.media_revision || 0) ||
+                 peer.microphone !== Boolean(device.settings?.microphone))) closePeer(device.device_id);
     startPeer(device).catch(error => {
       setStreamState(device.device_id, "VIDEO ERROR");
       console.error("WebRTC setup failed", error);

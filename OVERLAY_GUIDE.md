@@ -17,6 +17,24 @@ If the Studio PC's IP changes, close Studio and run `.venv\Scripts\python.exe sc
 
 Reference: [OBS Browser Source](https://obsproject.com/kb/browser-source) and [Windows certificate import](https://learn.microsoft.com/en-us/powershell/module/pki/import-certificate).
 
+## Combined DRS video and camera sound
+
+`/overlay` is a transparent, live graphics layer, not a camera/audio feed. Use `/broadcast` for five-second buffered DRS video **and microphone sound** with time-matched graphics on top.
+
+1. On the camera device, enable **Microphone** and allow microphone permission. This now works before or after connection. Enabling **audio analysis / test mic** on a connected camera also shares that mic with live video and replay. **Stop analysis** stops the meter only; set **Microphone → Disabled** to stop camera sound.
+2. Keep the camera's replay recorder running and open the LAN `/broadcast` page. It selects Umpire POV first when no camera was saved, or you can choose another connected DRS camera. It plays full-quality encoded clips from the existing replay buffer without taking the umpire console's live feed away. After startup buffering, the status should say **DELAYED 5.x s**. Audio status distinguishes sound received, muted playback and no mic received.
+3. Camera sound is requested by default. If the browser blocks autoplay with sound, the picture keeps playing muted and an **Enable camera audio** button appears. In OBS, right-click the Browser Source → **Interact** to click this button. This button remains available even in the clean output until sound is unlocked.
+4. Click **Copy clean OBS link**. The URL includes the selected camera ID, `clean=1` and `audio=1` (or `audio=0` if deliberately muted). Use this LAN URL as an OBS Browser Source at 1920 × 1080. The clean output hides the operator controls and waits for that exact camera if it disconnects, instead of silently using a different angle.
+5. Enable **Control audio via OBS** in the Browser Source properties to put this source's sound in the OBS mixer. Make sure its mixer channel is not muted and is included in your recording/stream audio tracks. Do not capture the same camera sound twice through a second source or Desktop Audio.
+
+The audio-routing option is defined by the official [OBS browser plugin](https://github.com/obsproject/obs-browser/blob/master/data/locale/en-US.ini).
+
+Changing the camera mic refreshes the live WebRTC links and restarts the replay recorder with the new audio setting; a brief video interruption is expected. Camera sound is separate from the DRS dBFS analysis meter, so enabling analysis is not required for broadcasting audio. Already-saved video-only replay clips cannot gain audio retrospectively.
+
+The delay is approximately five seconds: native playback and preloaded overlapping clips absorb normal network jitter, rather than drawing/re-encoding frames in a canvas. Sound is part of the same clip as video. Graphics use the actual displayed video timestamp and a bounded, in-memory score history. Startup needs clock synchronisation and the first five-second clip. Missing/late uploads display a buffering notice; the player does not silently switch to undelayed footage. Delay cannot improve a low-resolution capture or conceal an outage longer than the available buffer. Recorded quality follows the camera settings; start at 720p/30 FPS for several cameras.
+
+**Retry video** restarts the selected buffer player. Keep the camera page visible and Studio running. Sound comes from the selected program camera only. The umpire wall stays live and muted. `/broadcast?delay=0` is an optional undelayed WebRTC diagnostic mode; its graphics are live as well. `/overlay` alone stays live — use the combined broadcast URL when video/audio/graphics must share the delay.
+
 ## Match setup
 
 Set scheduled overs and wickets per innings before the first ball. Defaults are 20 overs and 10 wickets. Set an adjusted target explicitly when needed; otherwise the target is the first innings total plus one. Match title and venue appear on the large graphics.
@@ -30,10 +48,13 @@ Use **New match / clear scores** between matches. It clears both innings and cap
 - **Rotation** selects automatic messages, manual messages, or both. All overlay windows share the same rotation.
 - A confirmed batter change near a wicket queues **Last wicket: name, runs (balls)**. It can return later during rotation. Use the stats editor to supply the last wicket when the feed cannot identify it.
 - Current-over snapshots supply boundary counts. Repeated packets do not increment counts, and corrections/undo replace the relevant over. Partial coverage is labelled **Recorded boundaries**; manually supplied full counts remove that label.
+- Boundaries no longer interrupt after every four/six. They have a low rotation weight and a cooldown of at least 30 seconds (or three message intervals).
+- **Partnership runs (balls)** includes extras and counts legal balls since the latest recorded wicket. Joining mid-partnership with earlier wickets makes this unknown; enter a correction in the stats editor. Corrections continue with subsequent runs/balls and reset at the next wicket.
+- In the final third of the second innings, most automatic slots alternate the chase equation (**Team needs runs from balls**) and current/required run rates. Manual-only rotation remains manual.
 - First-innings projections are one strip message with all four estimates, for example `PROJECTED: 6.39 RPO 128 | 7 RPO 134 | 8 RPO 143 | 9 RPO 153`. There is no separate projection cycle. The three whole-number rates are above the actual current rate; this message is weighted more heavily after the first third of the innings. Cricket overs use six-ball arithmetic: 10.2 is 62 legal balls.
 - At full time the strip displays the calculated result, including runs, wickets or a tie. A result override supports no-result or other manually confirmed outcomes.
 
-## Four graphics
+## Six graphics
 
 | Graphic | Manual control | Automatic trigger |
 | --- | --- | --- |
@@ -41,18 +62,24 @@ Use **New match / clear scores** between matches. It clears both innings and cap
 | Batting card | 02 · Batting card | Crossing halfway through the scheduled overs |
 | Small innings-break graphic | 03 · Innings break | First innings reaches its over/wicket limit, or End innings |
 | Match summary | 04 · Match summary | 30 seconds after the match ends |
+| Dismissed batter panel | 05 · Last wicket / Save & show wicket graphic | Confirmed outgoing batter near a wicket |
+| Power Surge badge | 06 · Power Surge on/off | Manual only |
 
 Graphics use the corresponding team's custom colour and uploaded logo. The summary contains each innings total, overs, up to four leading batters and bowling figures, plus the result. Asterisks mark known not-out batters. Missing fields are shown as dashes or labelled unavailable.
 
 Colours and logos belong to each team name, not the batting/bowling position. Set each team's appearance once and save. Team-name matching ignores letter case and extra whitespace, and appearance follows manual team swaps, split Bluetooth team-name packets, the chase and restarts. Team profiles stay in private local `data/teams.json` and are retained when starting a new match. A genuinely new team initially inherits the current slot's appearance until you customise it.
 
-Each graphic stays on air for the configured duration (default 25 seconds). **Hide graphic** restores the normal score bar. Automatic triggers can be switched off individually. A graphic can always be shown manually for the selected innings, including drinks on demand.
+Manual graphics stay on air indefinitely until **Reopen scoreboard**, or another manual graphic is selected. This does not undo the match result. Automatic graphics use the configured duration (default 25 seconds) and cannot replace a held manual graphic. Automatic triggers can be switched off individually. Power Surge is an independent top-left badge in the current batting team's colour; its button toggles it, and Reopen scoreboard clears it too. The wicket panel appears above the normal scorebar and shows name, dismissal, runs/balls, dots, scoring shots, fours, sixes and strike rate.
 
-The first innings is retained when you select **Start second innings**. Teams, colours and logos swap and the live score resets. A Bluetooth team swap followed by an early-over score reset can also start the chase. The chase ends at the target or its innings limit. **End match** handles an early finish; enter a result override if only one innings has been played. **Reopen / undo finish** lets you correct the live score after a mistaken finish.
+The first innings is retained when you select **Start second innings**. Teams, colours and logos swap and the live score resets. A Bluetooth team swap followed by an early-over score reset can also start the chase. The chase ends at the target or its innings limit. **End match** handles an early finish; enter a result override if only one innings has been played. The separate **Undo match finish** action lets you correct the live score after a mistaken finish.
 
 ## Statistics and corrections
 
-The Generic scoreboard feed provides the current batter slots, current bowler, totals and current-over delivery snapshot. It does not supply a complete historical scorecard, confirmed dismissal methods or an authoritative match-end event.
+The current Generic Bluetooth mapping provides batter slots, current bowler, totals and current-over delivery snapshots, but has no confirmed dismissal-method field or authoritative match-end event. Unknown wickets show **Out**, never an invented dismissal. If your scorer sends richer wicket fields, supply a post-wicket receiver log so they can be mapped correctly.
+
+Use **Confirm wicket details** (or the desktop **Wicket details** shortcut): select the innings/batter, choose Bowled/Caught/LBW/Run out/Stumped/etc., and optionally enter bowler/fielder. **Save dismissal** corrects the scorecard and existing wicket panel; **Save & show wicket graphic** also holds the panel on air. This does not increment the live wicket total. A final wicket with no incoming batter can be identified here.
+
+Per-batter dots/scoring shots are calculated from complete observed runs/balls changes; fours/sixes also require matching delivery tokens. Missing deliveries, extras-only ambiguous events or late joining leave unknown values as dashes. Enter confirmed dots/fours/sixes in the statistics editor when needed. Strike rate is calculated from known runs/balls. No Fox branding or broadcast footage is included in the application.
 
 The app records received player updates, completed-over totals, boundary snapshots and wicket changes. Runs per over are calculated only where both score endpoints were observed; missed overs stay blank. It does not guess boundary counts from total-score changes. Undo removes later score samples and corrected delivery snapshots replace previous ones. Late player/figure updates at the same final score are accepted after an innings ends.
 
@@ -65,3 +92,5 @@ Current-player updates can keep refreshing their runs and balls; dismissal text 
 `python scripts/preview_broadcast.py` starts an isolated loopback preview at `http://127.0.0.1:8871/scoreboard` with synthetic match data. It uses a separate temporary folder and does not modify the active match. Stop it with Ctrl+C when finished.
 
 Add `--live` to preview the scorebar and combined projections instead of the completed-match summary.
+
+Add `--camera-test` for opt-in `/test-camera` pages with an animated synthetic video source and a 440 Hz test tone when the mic is enabled. These use the production camera code and WebRTC signalling, without opening a physical camera/mic. Test routes are never exposed by the production app. All recordings and sample scores remain in the temporary preview folder.

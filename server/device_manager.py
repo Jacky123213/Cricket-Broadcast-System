@@ -73,6 +73,18 @@ class DeviceManager:
         if device:
             await asyncio.to_thread(self.database.touch_device, device_id)
 
+    async def update_media(self, device_id: str, websocket: WebSocket, microphone: bool) -> None:
+        """Only the active camera socket can announce a changed capture stream."""
+        async with self._lock:
+            device = self._devices.get(device_id)
+            if not device or device.websocket is not websocket:
+                return
+            revision = device.settings.get("media_revision", 0)
+            revision = revision if type(revision) is int and revision >= 0 else 0
+            device.settings = {**device.settings, "microphone": microphone,
+                               "media_revision": revision + 1}
+        await self.broadcast_snapshot()
+
     async def remove_camera(self, device_id: str, websocket: WebSocket) -> None:
         changed = False
         async with self._lock:

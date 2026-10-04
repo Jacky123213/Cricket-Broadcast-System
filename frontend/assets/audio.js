@@ -14,7 +14,10 @@
     if(!navigator.mediaDevices?.getUserMedia)throw Error('Microphone requires trusted HTTPS');
     status('Allow microphone access when the browser asks…');
     owned=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});
-    stream=owned;onMicrophone(owned);
+    stream=owned;
+    // A camera that adopts this mic owns its lifetime; stopping analysis must
+    // not silence its live broadcast or replay recording.
+    if(await onMicrophone(owned)===true)owned=null;
    }
    source=context.createMediaStreamSource(stream);analyser=context.createAnalyser();
    analyser.fftSize=2048;source.connect(analyser);

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import mimetypes
+import math
 import threading
 from html import escape
 import time
@@ -104,6 +105,7 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         return response
 
     app.mount("/static", StaticFiles(directory=FRONTEND / "assets"), name="static")
+    app.mount('/broadcast-assets', StaticFiles(directory=FRONTEND/'broadcast'), name='broadcast-assets')
     app.mount(
         "/scoreboard-assets",
         StaticFiles(directory=SCOREBOARD_FRONTEND),
@@ -218,6 +220,13 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"ok": True}
+
+    @app.get('/api/scoreboard/program-state')
+    async def program_state(at: float):
+        now = time.time()
+        if not math.isfinite(at) or not now-35 <= at <= now+1:
+            raise HTTPException(422, 'Choose a recent playout time')
+        return await asyncio.to_thread(scoreboard.program_snapshot, min(at,now))
 
     @app.post("/api/settings", include_in_schema=False)
     async def scoreboard_settings_compat(changes: dict[str, Any]) -> dict[str, bool]:
@@ -397,6 +406,8 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
                                 "signal": signal,
                             },
                         )
+                elif message.get("type") == "media_changed" and isinstance(message.get("microphone"), bool):
+                    await manager.update_media(device_id, websocket, message["microphone"])
         except WebSocketDisconnect:
             pass
         except Exception:

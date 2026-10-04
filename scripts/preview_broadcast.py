@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import uvicorn
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from server.config import Settings
 from server.main import create_app
 from server.scoreboard_state import DEFAULT, State
@@ -17,6 +19,15 @@ from server.scoreboard_state import DEFAULT, State
 def serve(state, root):
     app = create_app(Settings(database_path=root/'drs.db', port=8871, ssl_certfile=None,
                               ssl_keyfile=None), scoreboard=state)
+    if '--camera-test' in sys.argv:
+        # Opt-in synthetic camera; never mounted by the production application.
+        app.mount('/test-assets', StaticFiles(directory=ROOT/'tests'/'fixtures'))
+
+        @app.get('/test-camera', include_in_schema=False)
+        async def test_camera():
+            page = (ROOT/'frontend'/'camera'/'index.html').read_text('utf-8')
+            return HTMLResponse(page.replace('</head>',
+                '<script src="/test-assets/broadcast-camera.js"></script></head>'))
     with patch('server.main.start_receiver'):
         uvicorn.run(app, host='127.0.0.1', port=8871, log_level='warning')
 
@@ -26,7 +37,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='graphics-', dir=ROOT / '.preview') as directory:
         root = Path(directory)
         state = State(root / 'scores')
-        if '--live' in sys.argv:
+        if '--live' in sys.argv or '--camera-test' in sys.argv:
             state.save({**DEFAULT, 'source': 'manual', 'team1': 'Pavilion XI', 'team2': 'Creek XI',
                         'runs': '66', 'wickets': '3', 'overs': '10.2', 'color1': '#14b8a6',
                         'color2': '#f6b342', 'batter1_name': 'A. Rivers', 'batter2_name': 'M. Reid',

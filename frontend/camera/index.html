@@ -65,6 +65,7 @@
           <div class="field field-wide">
             <label for="microphone">Microphone</label>
             <select id="microphone"><option value="false">Disabled</option><option value="true">Enabled</option></select>
+            <p>Can change while connected. Enabling the mic adds sound to replay and the live broadcast; allow microphone permission if asked.</p>
           </div>
         </div>
         <div id="secureWarning" class="warning" hidden>
@@ -91,7 +92,7 @@
       </div>
       <button id="disconnectButton" class="btn btn-danger" style="margin-top:16px" type="button">Disconnect</button>
     </section>
-  <section class="panel side-panel"><button type="button" class="btn" id="enableAudio">Enable audio analysis / test mic</button><button type="button" class="btn" id="stopAudio">Stop analysis</button><p id="audioStatus">Tap to allow microphone access and speak. A moving dBFS reading confirms local capture. For replay sound, enable microphone before connecting.</p></section></main>
+  <section class="panel side-panel"><button type="button" class="btn" id="enableAudio">Enable audio analysis / test mic</button><button type="button" class="btn" id="stopAudio">Stop analysis</button><p id="audioStatus">Tap to allow microphone access and speak. A moving dBFS reading confirms local capture. A connected camera also sends this mic to replay and broadcast. Stop analysis leaves camera sound on; choose Microphone → Disabled to stop capture.</p></section></main>
   <div id="toast" class="toast" role="status"></div>
   <script>
     (function () {
@@ -113,7 +114,7 @@
     }());
   </script>
   <script defer src="/static/common.js?v=0.15.2"></script>
-  <script defer src="/static/recording.js?v=0.15.2"></script>
-  <script defer src="/static/audio.js?v=0.15.2"></script><script defer src="/static/camera-optics.js?v=0.15.2"></script><script defer src="/static/camera.js?v=0.15.2"></script>
+  <script defer src="/static/recording.js?v=1.1.0"></script>
+  <script defer src="/static/audio.js?v=1.1.0"></script><script defer src="/static/camera-optics.js?v=0.15.2"></script><script defer src="/static/camera.js?v=1.1.0"></script>
 </body>
 </html>

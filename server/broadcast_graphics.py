@@ -14,11 +14,11 @@ import re
 DEFAULT_CONFIG = {
     "total_overs": 20, "wickets_limit": 10, "target": None,
     "rotation_mode": "mixed", "interval_seconds": 10, "graphic_seconds": 25,
-    "auto_drinks": True, "auto_innings_break": True, "auto_summary": True,
+    "auto_drinks": True, "auto_innings_break": True, "auto_summary": True, "auto_wicket": True,
     "match_title": "BACKYARD CRICKET", "venue": "", "messages": [],
     "result_override": "",
 }
-KINDS = {"run_chart", "batting_card", "innings_break", "match_summary"}
+KINDS = {"run_chart", "batting_card", "innings_break", "match_summary", "wicket_card", "power_surge"}
 
 
 def integer(value):
@@ -38,7 +38,7 @@ def validate_config(changes):
     if not isinstance(changes, dict) or set(changes) - set(DEFAULT_CONFIG):
         raise ValueError("Unknown broadcast setting")
     for key, value in changes.items():
-        if key in ("auto_drinks", "auto_innings_break", "auto_summary"):
+        if key in ("auto_drinks", "auto_innings_break", "auto_summary", "auto_wicket"):
             if type(value) is not bool: raise ValueError(f"{key} must be true or false")
         elif key in ("total_overs", "wickets_limit", "interval_seconds", "graphic_seconds"):
             limits = {"total_overs": (1, 100), "wickets_limit": (1, 10),
@@ -81,12 +81,14 @@ class BroadcastGraphics:
         self.finished_at = None
         self.summary_shown = False
         self.active = None
+        self.power_surge = False
         self.pending = None
         self.pending_at = None
         self.previous = None
         self.strip = {"text": "BACKYARD CRICKET", "kind": "main"}
         self.next_strip_at = 0
         self.priority = None
+        self.last_boundary_strip = -math.inf
         self.dirty = False
         self.random = random.Random()
         if saved:
@@ -170,7 +172,7 @@ class BroadcastGraphics:
                 self.phase = "live"
                 self.innings.append(new_innings(score))
                 self.previous = None
-                self.active = None
+                if not self.active or self.active.get('until') is not None: self.active = None
             else: return
         if not self.innings: self.innings.append(new_innings(score))
         current = self.innings[-1]
@@ -186,6 +188,7 @@ class BroadcastGraphics:
             current["wicket_events"] = [e for e in current["wicket_events"] if e["number"] <= wickets]
             current["last_wicket"] = None
             self.priority = None
+            if self.active and self.active['kind'] == 'wicket_card' and self.active.get('until') is not None: self.active = None
             for row in current["batters"]:
                 if row.get("out_number", 0) > wickets:
                     row.update(dismissal="", out_number=0)
@@ -196,13 +199,11 @@ class BroadcastGraphics:
         if b % 6:
             current['over_tokens'][str(b // 6)] = score['deliveries'].split()
         if old_w is not None and wickets > old_w:
+            current['partnership_runs'] = current['partnership_balls'] = None
             for number in range(old_w + 1, wickets + 1):
-                current["wicket_events"].append({"balls": b, "number": number, "at": now})
+                current["wicket_events"].append({"balls": b, "runs": runs, "number": number, "at": now})
         self._players(current, score, previous, now)
-        if previous and previous["deliveries"] != score["deliveries"] and any(t in ("4", "6") for t in score["deliveries"].split()):
-            # Queue on additions/corrections; repeated COV writes do not add counts.
-            self.priority = "boundaries"
-            self.next_strip_at = 0
+        # Boundaries remain in normal rotation, never interrupt every scoring shot.
         halfway = self.config["total_overs"] * 3
         if old_b is not None and old_b < halfway <= b and not current["drinks_shown"]:
             current["drinks_shown"] = True
@@ -226,6 +227,18 @@ class BroadcastGraphics:
             for field in ("runs", "balls"):
                 value = integer(score[f"batter{slot}_{field}"])
                 if value is not None: row[field] = value
+            prior_runs = integer(previous.get(f'batter{slot}_runs', '')) if previous and previous.get(f'batter{slot}_name') == name else None
+            prior_balls = integer(previous.get(f'batter{slot}_balls', '')) if previous and previous.get(f'batter{slot}_name') == name else None
+            shots = row.setdefault('shots', {})
+            if row['balls'] is not None:
+                row['shots'] = shots = {k:v for k,v in shots.items() if int(k) <= row['balls']}
+            if prior_balls is not None and row['balls'] == prior_balls + 1 and prior_runs is not None and row['runs'] is not None:
+                delta = row['runs'] - prior_runs
+                tokens = score['deliveries'].split()
+                token = tokens[-1] if tokens else ''
+                if 0 <= delta <= 6:
+                    confirmed = previous['deliveries'] != score['deliveries'] and token == str(delta)
+                    shots[str(row['balls'])] = {'runs': delta, 'boundary': delta if confirmed and delta in (4,6) else None if delta in (4,6) else 0}
             row["active"] = row['dismissal'].lower() in ('', 'not out')
             # Last wicket identity is confirmed by a changed batter slot near a
             # wicket event, not guessed from the striker flag (run-outs exist).
@@ -234,15 +247,18 @@ class BroadcastGraphics:
             if prior_name and prior_name != name and event and now - event["at"] < 120:
                 outgoing = next((r for r in current["batters"] if r["name"] == prior_name), None)
                 if outgoing and not outgoing.get("out_number"):
-                    dismissal = outgoing['dismissal'] if outgoing['dismissal'].lower() not in ('', 'not out') else 'Out · details pending'
+                    dismissal = outgoing['dismissal'] if outgoing['dismissal'].lower() not in ('', 'not out') else 'Out'
                     outgoing.update(active=False, dismissal=dismissal, out_number=event['number'])
                     event['identified_name'] = prior_name
                     current["last_wicket"] = copy.deepcopy(outgoing)
                     self.priority = "last_wicket"
                     self.next_strip_at = 0
+                    if self.config['auto_wicket']: self.show('wicket_card', now, reason='Wicket')
         active_names = {score["batter1_name"], score["batter2_name"]}
         if any(active_names) and self.phase == 'live':
             for row in current["batters"]: row["active"] = row["name"] in active_names
+            for row in current['batters']:
+                if row['dismissal'].lower() not in ('', 'not out'): row['active'] = False
         name = score["bowler"].strip()
         if name:
             row = next((r for r in current["bowlers"] if r["name"] == name), None)
@@ -272,7 +288,7 @@ class BroadcastGraphics:
             self.phase = "complete"
             self.finished_at = now
             self.summary_shown = False
-            self.active = None
+            if not self.active or self.active.get('until') is not None: self.active = None
             self.next_strip_at = 0
             self.dirty = True
 
@@ -291,14 +307,21 @@ class BroadcastGraphics:
         if kind not in KINDS: raise ValueError("Unknown graphic")
         index = len(self.innings) - 1 if innings is None else innings
         if type(index) is not int or index < 0 or index >= len(self.innings): raise ValueError("No innings statistics available yet")
+        if kind == 'power_surge': self.power_surge = True; return
+        if kind == 'wicket_card' and not self.innings[index]['last_wicket']: raise ValueError('Confirm a last-wicket batter first')
+        if reason != 'Manual' and self.active and self.active.get('until') is None: return
         self.active = {"kind": kind, "innings": index, "reason": reason,
-                       "until": now + self.config["graphic_seconds"]}
+                       "until": None if reason == 'Manual' else now + self.config["graphic_seconds"]}
 
     def action(self, command, score, now):
         self.flush(now, force=True)
         kind = command.get("action")
         if kind == "show": self.show(command.get("kind"), now, innings=command.get("innings"))
-        elif kind == "hide": self.active = None
+        elif kind == "hide": self.active = None; self.power_surge = False
+        elif kind == 'power_surge_off': self.power_surge = False
+        elif kind == 'wicket_details':
+            self.wicket_details(command)
+            if command.get('show'): self.show('wicket_card', now, innings=command.get('innings'))
         elif kind == "end_innings": self.end_innings(now)
         elif kind == "finish": self.finish(now)
         elif kind == "reopen":
@@ -308,6 +331,7 @@ class BroadcastGraphics:
                 self.finished_at = None
                 self.summary_shown = False
                 self.active = None
+                self.power_surge = False
                 self.previous = copy.deepcopy(score)
                 self.observe(score, now, allow_end=False)
                 self.dirty = True
@@ -316,38 +340,43 @@ class BroadcastGraphics:
             self.phase = "live"
             self.innings.append(new_innings(score))
             self.previous = None
-            self.active = None
+            if not self.active or self.active.get('until') is not None: self.active = None
             self.dirty = True
         else: raise ValueError("Unknown broadcast action")
 
     def edit_stats(self, changes):
         index = changes.get("innings")
         if type(index) is not int or not 0 <= index < len(self.innings): raise ValueError("Choose an innings")
-        if set(changes) - {"innings", "batters", "bowlers", "extras", "over_runs", "fours", "sixes", "last_wicket_name"}: raise ValueError("Unknown statistics field")
+        if set(changes) - {"innings", "batters", "bowlers", "extras", "over_runs", "fours", "sixes", "last_wicket_name", "partnership_runs", "partnership_balls"}: raise ValueError("Unknown statistics field")
         current = self.innings[index]
         updated = copy.deepcopy(current)
         for key in ("batters", "bowlers"):
             if key not in changes: continue
             rows = changes[key]
             if not isinstance(rows, list) or len(rows) > 15: raise ValueError("Use at most 15 player rows")
-            allowed = {"name", "runs", "balls", "dismissal"} if key == "batters" else {"name", "figures", "overs"}
+            allowed = {"name", "runs", "balls", "dismissal", "dots", "fours", "sixes"} if key == "batters" else {"name", "figures", "overs"}
             cleaned = []
             for row in rows:
                 if not isinstance(row, dict) or set(row) - allowed: raise ValueError("Invalid player row")
-                item = {k: row.get(k, "") for k in allowed}
+                numeric = {'runs','balls','dots','fours','sixes'}
+                item = {k: row.get(k, None if k in numeric else '') for k in allowed}
                 for k, v in item.items():
-                    if k in ("runs", "balls"):
+                    if k in numeric:
                         if v is not None and (type(v) is not int or not 0 <= v <= 9999): raise ValueError("Player scores must be non-negative whole numbers or blank")
                     elif not isinstance(v, str) or len(v) > 160: raise ValueError("Invalid player text")
                 if item["name"].strip():
-                    if key == "batters": item.update(active=item["dismissal"].lower() in ("", "not out"), out_number=0)
+                    if key == "batters":
+                        prior = next((r for r in current['batters'] if r['name'] == item['name']), {})
+                        item.update(active=item["dismissal"].lower() in ("", "not out"), out_number=prior.get('out_number',0), shots=copy.deepcopy(prior.get('shots',{})))
+                        if item['dots'] is not None and item['balls'] is not None and item['dots'] > item['balls']: raise ValueError('Dots cannot exceed balls faced')
                     cleaned.append(item)
             updated[key] = cleaned
-        for key in ("extras", "fours", "sixes"):
+        for key in ("extras", "fours", "sixes", "partnership_runs", "partnership_balls"):
             if key in changes:
                 v = changes[key]
                 if v is not None and (type(v) is not int or not 0 <= v <= 9999): raise ValueError(f"{key} must be a non-negative whole number or blank")
                 updated[key] = v
+                if key in ('partnership_runs','partnership_balls'): updated[key+'_at'] = current['runs' if key.endswith('runs') else 'balls']
         if "over_runs" in changes:
             values = changes["over_runs"]
             if not isinstance(values, list) or len(values) > 100 or any(v is not None and (type(v) is not int or not 0 <= v <= 999) for v in values): raise ValueError("Invalid runs per over")
@@ -367,6 +396,43 @@ class BroadcastGraphics:
         else: updated['last_wicket'] = None
         self.next_strip_at = 0
         self.dirty = True
+
+    def wicket_details(self, command):
+        index = command.get('innings', len(self.innings)-1)
+        if type(index) is not int or not 0 <= index < len(self.innings): raise ValueError('Choose an innings')
+        current = self.innings[index]
+        name = command.get('name', '')
+        row = next((r for r in current['batters'] if r['name'] == name), None)
+        if not row: raise ValueError('Choose a known batter')
+        dismissal = command.get('dismissal', '')
+        if not isinstance(dismissal, str): raise ValueError('Enter the confirmed dismissal')
+        dismissal = dismissal.strip()
+        if not dismissal or len(dismissal) > 160 or dismissal.lower() == 'not out': raise ValueError('Enter the confirmed dismissal')
+        row.update(dismissal=dismissal, active=False)
+        event = next((e for e in reversed(current['wicket_events']) if not e.get('identified_name')), None)
+        if event and not row.get('out_number'):
+            row['out_number'] = event['number']
+            event['identified_name'] = name
+        current['last_wicket'] = copy.deepcopy(row)
+        self.next_strip_at = 0
+        self.priority = 'last_wicket'
+        self.dirty = True
+
+    def batter_stats(self, row):
+        result = copy.deepcopy(row)
+        if result.get('dismissal', '').lower() == 'out · details pending': result['dismissal'] = 'Out'
+        shots = row.get('shots', {})
+        complete = row.get('balls') is not None and len(shots) == row['balls']
+        for key in ('dots','fours','sixes'):
+            result[key+'_manual'] = row.get(key)
+            if row.get(key) is not None: result[key] = row[key]
+            elif complete and (key == 'dots' or all(s['boundary'] is not None for s in shots.values())):
+                result[key] = sum(s['runs'] == 0 if key == 'dots' else s['boundary'] == (4 if key == 'fours' else 6) for s in shots.values())
+            else: result[key] = None
+        result['scoring_shots'] = row['balls'] - result['dots'] if row.get('balls') is not None and result['dots'] is not None else None
+        result['strike_rate'] = round(row['runs'] * 100 / row['balls']) if row.get('balls') and row.get('runs') is not None else None
+        result.pop('shots', None)
+        return result
 
     def stats(self, current):
         out = copy.deepcopy(current)
@@ -398,6 +464,18 @@ class BroadcastGraphics:
             chart.append({"over": index + 1, "runs": runs,
                           "wickets": sum(start < e["balls"] <= (index + 1) * 6 for e in current["wicket_events"])})
         out["chart"] = chart
+        out['batters'] = [self.batter_stats(row) for row in current['batters']]
+        last = current.get('last_wicket')
+        if last:
+            latest = next((r for r in current['batters'] if r['name'] == last['name']), last)
+            out['last_wicket'] = self.batter_stats(latest)
+        events = current.get('wicket_events', [])
+        baseline = events[-1] if events else {'runs':0,'balls':0} if current.get('wickets') == 0 else {}
+        for key, value in [('runs', current['runs']), ('balls', b)]:
+            field = 'partnership_'+key
+            manual = current.get(field)
+            out[field+'_manual'] = manual
+            out[field] = max(0,manual+value-current.get(field+'_at',value)) if manual is not None and value is not None else max(0,value-baseline[key]) if value is not None and baseline.get(key) is not None else None
         out.pop("samples", None)
         out.pop("over_tokens", None)
         return out
@@ -417,6 +495,13 @@ class BroadcastGraphics:
             last = current["last_wicket"]
             if last and last["runs"] is not None and last["balls"] is not None:
                 auto.append({"kind": "last_wicket", "text": f"LAST WICKET  {last['name']} {last['runs']} ({last['balls']})"})
+            if self.phase == 'live' and current['partnership_runs'] is not None and current['partnership_balls'] is not None:
+                auto.append({'kind':'partnership','text':f"PARTNERSHIP  {current['partnership_runs']} ({current['partnership_balls']})"})
+            if self.phase == 'live' and len(self.innings) == 2 and current['runs'] is not None and current['balls'] is not None:
+                needed, remaining = max(0,self.target()-current['runs']), max(0,self.config['total_overs']*6-current['balls'])
+                auto.append({'kind':'chase','text':f"{current['team']} needs {needed} runs from {remaining} balls"})
+                if remaining and current['run_rate'] is not None:
+                    auto.append({'kind':'rates','text':f"RUN RATE {current['run_rate']:.2f}   REQUIRED RUN RATE {needed*6/remaining:.2f}"})
             if any(self.innings[-1]["over_tokens"].values()):
                 label = "BOUNDARIES" if current["boundaries_complete"] else "RECORDED BOUNDARIES"
                 auto.append({"kind": "boundaries", "text": f"{label}  FOURS {current['fours']}   SIXES {current['sixes']}"})
@@ -440,7 +525,7 @@ class BroadcastGraphics:
                     innings.update(color=score[f'color{slot}'], logo=score[f'logo{slot}'])
                 if innings['opposition'] == score[f'team{slot}']:
                     innings.update(opposition_color=score[f'color{slot}'], opposition_logo=score[f'logo{slot}'])
-        if self.active and self.active["until"] <= now: self.active = None
+        if self.active and self.active.get('until') is not None and self.active["until"] <= now: self.active = None
         if self.phase == "complete" and self.config["auto_summary"] and not self.summary_shown and now >= self.finished_at + 30:
             self.show("match_summary", now, reason="Full time")
             self.summary_shown = True
@@ -450,15 +535,21 @@ class BroadcastGraphics:
             self.strip = {"kind": "result", "text": result}
         elif now >= self.next_strip_at:
             candidates = self.candidates(score)
+            candidates = [c for c in candidates if c['kind'] != 'boundaries' or now-self.last_boundary_strip >= max(30,self.config['interval_seconds']*3)]
             chosen = next((c for c in candidates if c["kind"] == self.priority), None)
             self.priority = None
             if chosen is None:
                 pool = [c for c in candidates if c["kind"] != self.strip["kind"]] or candidates
-                weights = [4 if c["kind"] == "projection" and self.innings[-1]["balls"] >= self.config["total_overs"] * 2 else 1 for c in pool]
+                chase = [c for c in pool if c['kind'] in ('chase','rates')]
+                late = len(self.innings) == 2 and (self.innings[-1]['balls'] or 0) >= self.config['total_overs']*4
+                if chase and late and self.random.random() < .9: pool = chase
+                weights = [.25 if c['kind'] == 'boundaries' else 4 if c["kind"] == "projection" and self.innings[-1]["balls"] >= self.config["total_overs"] * 2 else 2 if c['kind'] == 'partnership' else 1 for c in pool]
                 chosen = self.random.choices(pool, weights=weights)[0] if pool else {"kind": "main", "text": score["banner"] or self.config["match_title"]}
             self.strip = {"kind": chosen["kind"], "text": chosen["text"]}
+            if chosen['kind'] == 'boundaries': self.last_boundary_strip = now
             self.next_strip_at = now + self.config["interval_seconds"]
         return {"config": copy.deepcopy(self.config), "phase": self.phase,
                 "innings": [self.stats(i) for i in self.innings], "target": self.target() if len(self.innings) > 1 else None,
                 "result": result, "active": copy.deepcopy(self.active), "strip": self.strip.copy(),
+                "power_surge": self.power_surge,
                 "summary_due_in": max(0, math.ceil(self.finished_at + 30 - now)) if self.finished_at and not self.summary_shown and self.config['auto_summary'] else None}

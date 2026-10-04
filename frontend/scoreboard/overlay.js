@@ -1,5 +1,10 @@
 'use strict';
 const $=id=>document.getElementById(id);
+const programMode=new URLSearchParams(location.search).get('program')==='1';
+let playoutAt=null;
+window.addEventListener('message',event=>{
+ if(programMode&&event.source===window.parent&&event.origin===location.origin&&event.data?.type==='broadcast-time'&&Number.isFinite(event.data.at))playoutAt=event.data.at;
+});
 function render(s){
  const d=s.score;
  const graphicShown=window.BackyardGraphics?.render(s.graphics,d)||false;
@@ -37,4 +42,10 @@ function render(s){
  $('connection').hidden=!d.visible||graphicShown||s.graphics?.phase==='complete'||s.graphics?.phase==='innings_break'||d.source==='manual'||age<=30;
  $('connection').textContent=s.last_score===null?'WAITING FOR SCORE':'NO SCORE UPDATE · '+Math.floor(age)+'s';
 }
-async function poll(){try{const r=await fetch('/api/state',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error();render(await r.json());}catch{$('connection').hidden=false;$('connection').textContent='SCORE SERVER OFFLINE';}finally{setTimeout(poll,500);}}poll();
+async function poll(){try{
+ const live=await fetch('/api/state',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!live.ok)throw Error();const state=await live.json();
+ if(programMode){
+  if(playoutAt===null){state.score.visible=false;render(state);return;}
+  const r=await fetch('/api/scoreboard/program-state?at='+encodeURIComponent(playoutAt),{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error();render(await r.json());
+ }else render(state);
+}catch{$('connection').hidden=false;$('connection').textContent='SCORE SERVER OFFLINE';}finally{setTimeout(poll,500);}}poll();

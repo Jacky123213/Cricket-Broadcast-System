@@ -4,11 +4,12 @@ from fastapi.testclient import TestClient
 
 from server.config import Settings
 from server.main import create_app
+from server.scoreboard_state import State
 
 
 def make_client(tmp_path: Path) -> TestClient:
     settings = Settings(database_path=tmp_path / "test.db", port=8765)
-    return TestClient(create_app(settings))
+    return TestClient(create_app(settings, scoreboard=State(tmp_path / 'scores')))
 
 
 def test_pages_and_health(tmp_path: Path) -> None:
@@ -154,3 +155,64 @@ def test_webrtc_signaling_is_relayed_both_directions(tmp_path: Path) -> None:
                     "device_id": "stream-camera",
                     "signal": answer,
                 }
+
+
+def test_umpire_and_broadcast_receive_same_camera_without_crossed_signals(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        with client.websocket_connect('/ws/umpire?console_id=umpire-view') as umpire, \
+                client.websocket_connect('/ws/umpire?console_id=broadcast-view') as output:
+            assert umpire.receive_json()['devices'] == []
+            assert output.receive_json()['devices'] == []
+            with client.websocket_connect('/ws/camera') as camera:
+                camera.send_json({'type':'register','device_id':'shared-camera',
+                                  'name':'Umpire camera','role':'UMPIRE_POV'})
+                assert camera.receive_json()['type'] == 'registered'
+                assert umpire.receive_json()['devices'][0]['device_id'] == 'shared-camera'
+                assert output.receive_json()['devices'][0]['device_id'] == 'shared-camera'
+                for viewer, console_id in [(umpire, 'umpire-view'), (output, 'broadcast-view')]:
+                    offer = {'description': {'type':'offer','sdp':console_id}, 'session_id':console_id+'-1'}
+                    viewer.send_json({'type':'webrtc_signal','device_id':'shared-camera','signal':offer})
+                    forwarded = camera.receive_json()
+                    assert forwarded['console_id'] == console_id
+                    assert forwarded['signal'] == offer
+                    answer = {'description': {'type':'answer','sdp':console_id}, 'session_id':console_id+'-1'}
+                    camera.send_json({'type':'webrtc_signal','console_id':console_id,'signal':answer})
+                    assert viewer.receive_json()['signal'] == answer
+                output.close()
+                umpire.send_json({'type':'webrtc_signal','device_id':'shared-camera','signal':{'flush':True}})
+                assert camera.receive_json()['console_id'] == 'umpire-view'
+
+
+def test_broadcast_page_includes_recovery_controls_and_hides_empty_layer(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        page = client.get('/broadcast').text
+        assert 'id="retry"' in page
+        assert 'Copy clean OBS link' in page
+        assert 'autoplay playsinline muted' in page
+        assert '[hidden]{display:none!important}' in client.get('/broadcast.css').text
+        assert 'no-store' in client.get('/broadcast.js').headers['cache-control']
+        assert client.get('/test-camera').status_code == 404
+
+
+def test_live_microphone_changes_refresh_both_viewers_and_keep_other_camera_settings(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        with client.websocket_connect('/ws/umpire?console_id=u') as umpire, \
+                client.websocket_connect('/ws/umpire?console_id=b') as output:
+            umpire.receive_json()
+            output.receive_json()
+            with client.websocket_connect('/ws/camera') as camera:
+                camera.send_json({'type': 'register', 'device_id': 'phone', 'name': 'Test',
+                                  'role': 'UMPIRE_POV', 'settings': {'microphone': False, 'fps': 30}})
+                camera.receive_json()
+                umpire.receive_json()
+                output.receive_json()
+                for enabled, revision in [(True, 1), (True, 2), (False, 3)]:
+                    camera.send_json({'type': 'media_changed', 'microphone': enabled, 'device_id': 'not-phone'})
+                    for viewer in [umpire, output]:
+                        device = viewer.receive_json()['devices'][0]
+                        assert device['device_id'] == 'phone'
+                        assert device['settings'] == {'microphone': enabled, 'media_revision': revision, 'fps': 30}
+                # Invalid inputs cannot change capture settings or disconnect the camera.
+                camera.send_json({'type': 'media_changed', 'microphone': 'true'})
+                camera.send_json({'type': 'heartbeat', 'sequence': 7})
+                assert camera.receive_json()['type'] == 'heartbeat_ack'
