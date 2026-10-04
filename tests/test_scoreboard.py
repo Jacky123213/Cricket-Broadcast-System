@@ -17,6 +17,21 @@ class ProtocolTests(unittest.TestCase):
             self.assertEqual(decode_packet(packet), {})
 
 class EnhancedTests(unittest.TestCase):
+    def test_observed_wicket_detail_fields(self):
+        for packet,expected in [
+            (b'LWNPlayer A',{'last_wicket_name':'Player A'}),
+            (b'LWS6 (3)',{'last_wicket_runs':'6','last_wicket_balls':'3'}),
+            (b'LWDc',{'last_wicket_code':'c'}),
+            (b'LWDb',{'last_wicket_code':'b'}),
+            (b'LWDlbw',{'last_wicket_code':'lbw'}),
+            (b'LWDro',{'last_wicket_code':'ro'}),
+            (b'LWBPlayer B',{'last_wicket_bowler':'Player B'}),
+            (b'LWFPlayer C',{'last_wicket_fielder':'Player C'}),
+            (b'LWF ',{'last_wicket_fielder':''}),
+            (b'LWS ',{'last_wicket_runs':'','last_wicket_balls':''}),
+        ]: self.assertEqual(decode_packet(packet),expected)
+        for packet in (b'LWS6 (oops)',b'LWS-1 (3)',b'LWN'+b'x'*161):
+            self.assertEqual(decode_packet(packet),{})
     def test_names_balls_and_figures(self):
         for packet, expected in [
             (b'BTNBackyard A', {'team1':'Backyard A'}),
@@ -61,13 +76,15 @@ class StateTests(unittest.TestCase):
         self.state.receive(b'BTS95/4');self.state.receive(b'BTSoops')
         self.assertEqual(self.state.snapshot()['score']['runs'],'95')
     def test_restore_clears_live_numbers(self):
-        self.state.save({'runs':'70','team1':'TEST'})
+        self.state.save({'runs':'70','team1':'TEST','last_wicket_name':'Player A','last_wicket_code':'b'})
         restored=State(self.temp.name).snapshot()['score']
         self.assertEqual(restored['runs'],'');self.assertEqual(restored['team1'],'TEST')
+        self.assertEqual(restored['last_wicket_name'],'');self.assertEqual(restored['last_wicket_code'],'')
     def test_reset_retains_appearance(self):
-        self.state.save({'team1':'A','runs':'9','banner':'OLD'})
+        self.state.save({'team1':'A','runs':'9','banner':'OLD','last_wicket_name':'Player A','last_wicket_code':'c'})
         self.state.reset();result=self.state.snapshot()['score']
         self.assertEqual(result['team1'],'A');self.assertEqual(result['runs'],'');self.assertEqual(result['banner'],'')
+        self.assertEqual(result['last_wicket_name'],'');self.assertEqual(result['last_wicket_code'],'')
     def test_invalid_settings_do_not_mutate(self):
         for data in ({'color1':'url(bad)'},{'logo1':'data:image/svg+xml;base64,abcd'},{'source':'unknown'},{'visible':'true'}):
             with self.assertRaises(ValueError): self.state.save(data)

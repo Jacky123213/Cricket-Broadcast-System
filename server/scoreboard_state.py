@@ -13,7 +13,10 @@ DEFAULT = dict(team1='HOME', team2='AWAY', color1='#ec218c', color2='#ff922e',
                batter1_name='', batter2_name='', batter1_runs='', batter2_runs='',
                batter1_balls='', batter2_balls='', striker='none', bowler='',
                bowler_figures='', bowler_overs='', deliveries='', banner='',
-               visible=True, source='bluetooth')
+               visible=True, source='bluetooth', last_wicket_name='', last_wicket_code='',
+               last_wicket_runs='', last_wicket_balls='', last_wicket_bowler='', last_wicket_fielder='')
+
+WICKET_FIELDS = tuple(k for k in DEFAULT if k.startswith('last_wicket_'))
 
 
 def team_key(name):
@@ -110,6 +113,7 @@ class State:
                       'batter2_name','batter1_balls','batter2_balls','bowler','bowler_figures',
                       'bowler_overs','deliveries'): self.data[k] = ''
             self.data['striker'] = 'none'
+            for key in WICKET_FIELDS: self.data[key] = ''
 
     def snapshot(self):
         with self.lock:
@@ -205,6 +209,7 @@ class State:
                 for prefix in ('team', 'color', 'logo'):
                     changes[prefix+'1'], changes[prefix+'2'] = self.data[prefix+'2'], self.data[prefix+'1']
                 changes.update(runs='0', wickets='0', overs='0.0')
+                changes.update({key:'' for key in WICKET_FIELDS})
                 self.graphics.action(command, {**self.data, **changes}, now)
                 self.save(changes)
             else:
@@ -222,6 +227,10 @@ class State:
         validate(changes)
         with self.lock:
             updated = self._team_appearance({**self.data, **changes}, changes)
+            # Do not carry a previous innings' delta wicket fields into a chase.
+            if updated['team1'] != self.data['team1']:
+                for key in WICKET_FIELDS:
+                    if key not in changes: updated[key] = ''
             self._persist_settings(updated)
             self.data = updated
             self.graphics.queue(self.data, changes, time.time())
@@ -229,7 +238,7 @@ class State:
     def reset(self):
         self.save({k: DEFAULT[k] for k in ('runs','wickets','overs','batter1_runs','batter2_runs',
                    'batter1_name','batter2_name','batter1_balls','batter2_balls','striker','bowler',
-                   'bowler_figures','bowler_overs','deliveries','banner')})
+                   'bowler_figures','bowler_overs','deliveries','banner',*WICKET_FIELDS)})
         with self.lock:
             self.last_score = None
             config = copy.deepcopy(self.graphics.config)
@@ -252,6 +261,8 @@ class State:
                 changes = dict(patch)
                 off = changes.pop('_strike_off', None)
                 if off == self.data['striker']: changes['striker'] = 'none'
+                if 'team1' in changes and changes['team1'] != self.data['team1']:
+                    changes.update({key:'' for key in WICKET_FIELDS})
                 self.data = self._team_appearance({**self.data, **changes}, changes)
                 if any(k in changes for k in ('team1', 'team2')):
                     try: self._persist_settings(self.data)

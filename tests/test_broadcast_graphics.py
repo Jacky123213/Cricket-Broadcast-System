@@ -347,3 +347,74 @@ def test_program_http_rejects_stale_and_invalid_timestamps(tmp_path):
         assert c.get('/api/scoreboard/program-state?at=100').json()['score']['runs']=='10'
         for at in ('nan','inf','64','102'):
             assert c.get('/api/scoreboard/program-state?at='+at).status_code==422
+
+
+def test_first_overs_setting_validated_and_persisted(tmp_path):
+    state=State(tmp_path)
+    state.broadcast_settings({'powerplay_overs':4})
+    assert State(tmp_path).graphics.config['powerplay_overs']==4
+    for value in (-1,101,True,'4',4.5):
+        with pytest.raises(ValueError):validate_config({'powerplay_overs':value})
+    state.broadcast_settings({'powerplay_overs':0})
+    assert state.graphics.config['powerplay_overs']==0
+
+
+def test_bluetooth_caught_and_bowled_delta_packets_populate_cards(tmp_path):
+    state=State(tmp_path)
+    now=[100.0]
+    def send(*packets):
+        with patch('server.scoreboard_state.time.time',side_effect=lambda:now[0]):
+            for packet in packets:
+                state.receive(packet.encode());now[0]+=.06
+            now[0]+=1.3
+            return state.snapshot()
+    send('BTNAlpha','FTNBeta','BTS0/0','OVB0','B1NAli','B1S0','B1B0','B2NBo','B2S0','B2B0')
+    send('COV.','OVB0.1','B1B1')
+    send('COV. 6','OVB0.2','BTS6/0','B1S6','B1B2')
+    data=send('COV. 6 W','OVB0.3','BTS6/1','BTW1','B1NBo','B1S0','B1B0','B2N ',
+              'F1S6/1 (0.3)','LWN Ali','LWS6 (3)','LWDc','LWBDee','LWFCam')
+    row=data['graphics']['innings'][0]['last_wicket']
+    assert (row['name'],row['runs'],row['balls'],row['dismissal'])==('Ali',6,3,'c Cam b Dee')
+    assert row['dots']==2 and row['sixes']==1 and row['strike_rate']==200
+    assert data['graphics']['active']['kind']=='wicket_card'
+    send('B2NEve','B2S0','B2B0')
+    # Unchanged LWB is deliberately absent from the next wicket's delta.
+    data=send('COV. 6 W W','OVB0.4','BTS6/2','BTW2','B2N ',
+              'F1S6/2 (0.4)','LWNEve','LWS0 (1)','LWDb','LWF ')
+    rows=data['graphics']['innings'][0]['batters']
+    assert next(r for r in rows if r['name']=='Ali')['dismissal']=='c Cam b Dee'
+    row=data['graphics']['innings'][0]['last_wicket']
+    assert (row['name'],row['runs'],row['balls'],row['dismissal'])==('Eve',0,1,'b Dee')
+    assert row['dots']==1
+    assert next(r for r in rows if r['name']=='Bo')['active'] is True
+    with patch('server.scoreboard_state.time.time',return_value=now[0]):
+        state.broadcast_action({'action':'wicket_details','name':'Eve','dismissal':'lbw b Dee'})
+    data=send('BTS6/2')
+    assert data['graphics']['innings'][0]['last_wicket']['dismissal']=='lbw b Dee','an explicit correction survives repeated feed state'
+    # Duplicate snapshots neither add wickets nor extend the automatic timer.
+    deadline=data['graphics']['active']['until']
+    data=send('BTS6/2','LWNEve','LWS0 (1)')
+    assert data['graphics']['active']['until']==deadline
+    send('B2NFay','B2S0','B2B0')
+    data=send('COV. 6 W W W','OVB0.5','BTS6/3','B2N ','LWNFay','LWDlbw')
+    assert data['graphics']['innings'][0]['last_wicket']['dismissal']=='lbw b Dee'
+    send('B2NGus','B2S0','B2B0')
+    # Unchanged LWS is not resent; no bowler attribution on a run-out.
+    data=send('COV. 6 W W W W','OVB1.0','BTS6/4','B2N ','F1S6/3 (1.0)',
+              'LWNGus','LWDro','LWB ','LWFCam')
+    assert data['score']['overs']=='1.0' and data['score']['bowler_overs']=='1.0'
+    assert data['graphics']['innings'][0]['last_wicket']['dismissal']=='run out (Cam)'
+    assert data['graphics']['innings'][0]['wicket_events'][-1]['balls']==6
+    # Undo must not reapply the stale last-wicket delta to the restored batter.
+    data=send('BTS6/3','OVB0.5','B2NGus','B2S0','B2B0')
+    assert data['graphics']['innings'][0]['last_wicket'] is None
+    assert next(r for r in data['graphics']['innings'][0]['batters'] if r['name']=='Gus')['active'] is True
+
+
+def test_last_wicket_feed_works_without_incoming_batter_and_unknown_type_is_out():
+    engine=BroadcastGraphics();s=scoreboard()
+    observe(engine,s)
+    s.update(wickets='1',overs='0.1',last_wicket_name='Ali',last_wicket_runs='0',last_wicket_balls='1',last_wicket_code='unconfirmed')
+    data=observe(engine,s,102)
+    assert data['innings'][0]['last_wicket']['dismissal']=='Out'
+    assert data['active']['kind']=='wicket_card'

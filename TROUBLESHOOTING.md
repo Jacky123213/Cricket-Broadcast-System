@@ -32,6 +32,14 @@ Check the console for an occupied port or WebView2 error. Microsoft Edge WebView
 
 ## Desktop shows the old scoreboard without graphics or statistics
 
-Close the Studio window and its launcher console, then run `START_STUDIO.bat` from your installation folder. The home page should show **Studio 1.1.0 · Overlay 0.4.0**, and the Scoreboard header has **Graphics**, **Wicket details** and **Edit stats** shortcuts. These jump to the corresponding controls inside the broadcast desk.
+Close the Studio window and its launcher console, then run `START_STUDIO.bat` from your installation folder. The home page should show **Studio 1.1.1 · Overlay 0.4.1**, and the Scoreboard header has **Graphics**, **Wicket details** and **Edit stats** shortcuts. These jump to the corresponding controls inside the broadcast desk.
 
 The launcher now uses a content-specific UI build URL and the server sends no-cache UI responses. It also waits for its own server startup: an older instance occupying port 8765 can no longer silently be opened by a new launch. If another instance is still running, close it first; do not clear match data or reinstall to refresh the interface.
+
+## Batting card does not open
+
+Studio 1.1.1 fixes the renderer error that prevented the batting card and runs chart from opening. Restart Studio and refresh the OBS Browser Source, then choose **02 · Batting card**. Manual graphics remain displayed until **Reopen scoreboard** or a different graphic is selected.
+
+## Wicket shows Out instead of its dismissal
+
+Studio 1.1.1 reads the last-wicket Bluetooth fields; caught, bowled, LBW and run-out were confirmed with live tests. After restarting Studio, use the scorer's **Refresh scoreboard** action to resend current fields. Trailing wicket details may arrive slightly after the score. Unknown or absent methods remain **Out**; **Wicket details · optional correction** is available for corrections. Earlier wickets whose fields were never captured cannot be reconstructed automatically.

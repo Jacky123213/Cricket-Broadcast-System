@@ -16,7 +16,7 @@ DEFAULT_CONFIG = {
     "rotation_mode": "mixed", "interval_seconds": 10, "graphic_seconds": 25,
     "auto_drinks": True, "auto_innings_break": True, "auto_summary": True, "auto_wicket": True,
     "match_title": "BACKYARD CRICKET", "venue": "", "messages": [],
-    "result_override": "",
+    "result_override": "", "powerplay_overs": 0,
 }
 KINDS = {"run_chart", "batting_card", "innings_break", "match_summary", "wicket_card", "power_surge"}
 
@@ -40,9 +40,9 @@ def validate_config(changes):
     for key, value in changes.items():
         if key in ("auto_drinks", "auto_innings_break", "auto_summary", "auto_wicket"):
             if type(value) is not bool: raise ValueError(f"{key} must be true or false")
-        elif key in ("total_overs", "wickets_limit", "interval_seconds", "graphic_seconds"):
+        elif key in ("total_overs", "wickets_limit", "interval_seconds", "graphic_seconds", "powerplay_overs"):
             limits = {"total_overs": (1, 100), "wickets_limit": (1, 10),
-                      "interval_seconds": (5, 60), "graphic_seconds": (5, 120)}
+                      "interval_seconds": (5, 60), "graphic_seconds": (5, 120), "powerplay_overs": (0, 100)}
             lo, hi = limits[key]
             if type(value) is not int or not lo <= value <= hi:
                 raise ValueError(f"{key} must be between {lo} and {hi}")
@@ -114,6 +114,9 @@ class BroadcastGraphics:
         self.flush(now)
         self.pending = copy.deepcopy(score)
         if self.pending_at is None: self.pending_at = now
+        # Wicket metadata arrives after the score/player-slot writes. Wait for
+        # its trailing fields so an old fielder/type is not shown on a new batter.
+        if any(key.startswith('last_wicket_') for key in changes): self.pending_at = now
         if "deliveries" in changes:
             b = balls(score["overs"])
             current_team = self.innings[-1]['team'] if self.innings else score['team1']
@@ -191,7 +194,7 @@ class BroadcastGraphics:
             if self.active and self.active['kind'] == 'wicket_card' and self.active.get('until') is not None: self.active = None
             for row in current["batters"]:
                 if row.get("out_number", 0) > wickets:
-                    row.update(dismissal="", out_number=0)
+                    row.update(dismissal="", out_number=0, dismissal_manual=False)
         current.update(team=score["team1"], opposition=score["team2"], color=score["color1"],
                        opposition_color=score["color2"], logo=score["logo1"],
                        opposition_logo=score["logo2"], runs=runs, wickets=wickets, balls=b)
@@ -259,6 +262,7 @@ class BroadcastGraphics:
             for row in current["batters"]: row["active"] = row["name"] in active_names
             for row in current['batters']:
                 if row['dismissal'].lower() not in ('', 'not out'): row['active'] = False
+        self._feed_last_wicket(current, score, now)
         name = score["bowler"].strip()
         if name:
             row = next((r for r in current["bowlers"] if r["name"] == name), None)
@@ -266,6 +270,58 @@ class BroadcastGraphics:
                 row = {"name": name, "figures": "", "overs": ""}
                 current["bowlers"].append(row)
             row.update(figures=score["bowler_figures"], overs=score["bowler_overs"])
+
+    def _feed_last_wicket(self, current, score, now):
+        name = score.get('last_wicket_name', '').strip()
+        number = current.get('wickets')
+        if not name or not number: return
+        confirmed = current.get('feed_wicket', {})
+        if confirmed.get('name') == name and confirmed.get('number', 0) != number:
+            # Old LWN persists between delta updates and after an undo.
+            return
+        row = next((r for r in current['batters'] if r['name'] == name), None)
+        if row and row.get('out_number') and row['out_number'] < number: return
+        if row is None:
+            row = {'name':name, 'runs':None, 'balls':None, 'dismissal':'',
+                   'active':False, 'out_number':0, 'shots':{}}
+            current['batters'].append(row)
+        code = score.get('last_wicket_code', '').lower()
+        bowler = score.get('last_wicket_bowler', '')
+        fielder = score.get('last_wicket_fielder', '')
+        # c/b/ro abbreviations are confirmed by live tests. Literal full types
+        # are readable as-is; unknown abbreviations fall back to Out, not guesses.
+        if code == 'b': dismissal = 'b '+bowler if bowler else 'Bowled'
+        elif code == 'c': dismissal = ('c '+fielder if fielder else 'Caught') + (' b '+bowler if bowler else '')
+        elif code == 'ro': dismissal = 'run out'+(' ('+fielder+')' if fielder else '')
+        else:
+            types = {'lbw':'lbw', 'run out':'run out', 'stumped':'stumped',
+                     'hit wicket':'hit wicket', 'retired out':'retired out',
+                     'timed out':'timed out', 'obstructing the field':'obstructing the field'}
+            dismissal = types.get(code, 'Out')
+            if code in ('lbw','stumped','hit wicket') and bowler: dismissal += ' b '+bowler
+            if code in ('run out','stumped') and fielder: dismissal += ' ('+fielder+')'
+        previous_last = current.get('last_wicket')
+        is_new = not previous_last or previous_last['name'] != name or previous_last.get('out_number') != number
+        # Correct an earlier slot-change inference if the authoritative name
+        # identifies a different batter (slot reshuffles and run-outs can do this).
+        event = next((e for e in reversed(current['wicket_events']) if e['number'] == number), None)
+        if event and event.get('identified_name') not in (None,name):
+            wrong = next((r for r in current['batters'] if r['name'] == event['identified_name']), None)
+            if wrong and wrong.get('out_number') == number: wrong.update(out_number=0,dismissal='',active=wrong['name'] in (score['batter1_name'],score['batter2_name']))
+        if event: event['identified_name'] = name
+        old_balls, old_runs = row.get('balls'), row.get('runs')
+        for field in ('runs','balls'):
+            value = integer(score.get('last_wicket_'+field,''))
+            if value is not None: row[field] = value
+        if row.get('balls') is not None and old_balls is not None and row['balls'] == old_balls+1 and row['runs'] == old_runs:
+            row.setdefault('shots',{})[str(row['balls'])] = {'runs':0,'boundary':0}
+        if row.get('dismissal_manual') and row.get('dismissal'): dismissal = row['dismissal']
+        row.update(dismissal=dismissal,active=False,out_number=number)
+        current['feed_wicket'] = {'name':name,'number':number}
+        current['last_wicket'] = copy.deepcopy(row)
+        if is_new:
+            self.priority = 'last_wicket'; self.next_strip_at = 0
+            if self.config['auto_wicket']: self.show('wicket_card',now,reason='Wicket')
 
     def target(self):
         if self.config["target"] is not None: return self.config["target"]
@@ -368,6 +424,7 @@ class BroadcastGraphics:
                     if key == "batters":
                         prior = next((r for r in current['batters'] if r['name'] == item['name']), {})
                         item.update(active=item["dismissal"].lower() in ("", "not out"), out_number=prior.get('out_number',0), shots=copy.deepcopy(prior.get('shots',{})))
+                        item['dismissal_manual'] = item['dismissal'] != prior.get('dismissal','') or prior.get('dismissal_manual',False)
                         if item['dots'] is not None and item['balls'] is not None and item['dots'] > item['balls']: raise ValueError('Dots cannot exceed balls faced')
                     cleaned.append(item)
             updated[key] = cleaned
@@ -408,7 +465,7 @@ class BroadcastGraphics:
         if not isinstance(dismissal, str): raise ValueError('Enter the confirmed dismissal')
         dismissal = dismissal.strip()
         if not dismissal or len(dismissal) > 160 or dismissal.lower() == 'not out': raise ValueError('Enter the confirmed dismissal')
-        row.update(dismissal=dismissal, active=False)
+        row.update(dismissal=dismissal, active=False, dismissal_manual=True)
         event = next((e for e in reversed(current['wicket_events']) if not e.get('identified_name')), None)
         if event and not row.get('out_number'):
             row['out_number'] = event['number']

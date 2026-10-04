@@ -28,7 +28,7 @@ function addMessage(message={type:'custom'}){
   box.querySelector('select').addEventListener('change',update);box.querySelector('button').onclick=()=>box.remove();update();$('messages').append(box);
 }
 $('addMessage').onclick=()=>addMessage();
-broadcast.onsubmit=async event=>{event.preventDefault();const data={};for(const [key,value] of new FormData(broadcast)){data[key]=['total_overs','wickets_limit','interval_seconds','graphic_seconds'].includes(key)?Number(value):key==='target'?(value===''?null:Number(value)):value;}
+broadcast.onsubmit=async event=>{event.preventDefault();const data={};for(const [key,value] of new FormData(broadcast)){data[key]=['total_overs','wickets_limit','interval_seconds','graphic_seconds','powerplay_overs'].includes(key)?Number(value):key==='target'?(value===''?null:Number(value)):value;}
   for(const key of ['auto_drinks','auto_innings_break','auto_summary','auto_wicket'])data[key]=broadcast.elements[key].checked;
   data.messages=[...$('messages').children].map(box=>{const type=box.querySelector('select').value;const keys=type==='custom'?['text']:type==='attendance'?['attendance']:['team1','team2','wins1','wins2'];return Object.fromEntries([['type',type],...keys.map(key=>[key,box.querySelector('[data-field="'+key+'"]').value])]);});
   try{await post('/api/scoreboard/broadcast/settings',data);await post('/api/scoreboard/settings',{banner:$('mainBanner').value});$('broadcastSave').textContent='Saved';error('');}catch(e){error(e.message);}

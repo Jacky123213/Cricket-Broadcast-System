@@ -39,6 +39,8 @@ The delay is approximately five seconds: native playback and preloaded overlappi
 
 Set scheduled overs and wickets per innings before the first ball. Defaults are 20 overs and 10 wickets. Set an adjusted target explicitly when needed; otherwise the target is the first innings total plus one. Match title and venue appear on the large graphics.
 
+In **Graphics & match setup → Runs chart · highlight first X overs**, enter the Power Play length and click **Save match setup**. The first X overs use light-to-team-colour bars under a **POWER PLAY** bracket; later bars use the batting team's colour. The full innings remains visible, including blank future overs. Set **0** to turn highlighting off. This is a presentation setting, not an automatic competition-rule decision.
+
 Use **New match / clear scores** between matches. It clears both innings and captured history while retaining colours, logos, rotation settings and additional messages. Capture from the start of the innings for the most complete automatic statistics.
 
 ## Information strip
@@ -46,7 +48,7 @@ Use **New match / clear scores** between matches. It clears both innings and cap
 - **Main message** is your free text. Long lines scroll so the whole message can be shown.
 - **Add information** supports extra text, head-to-head team names and win counts, and attendance.
 - **Rotation** selects automatic messages, manual messages, or both. All overlay windows share the same rotation.
-- A confirmed batter change near a wicket queues **Last wicket: name, runs (balls)**. It can return later during rotation. Use the stats editor to supply the last wicket when the feed cannot identify it.
+- Bluetooth last-wicket fields, or a confirmed batter change near a wicket, queue **Last wicket: name, runs (balls)**. It can return later during rotation. Use the stats editor to supply the last wicket when the feed cannot identify it.
 - Current-over snapshots supply boundary counts. Repeated packets do not increment counts, and corrections/undo replace the relevant over. Partial coverage is labelled **Recorded boundaries**; manually supplied full counts remove that label.
 - Boundaries no longer interrupt after every four/six. They have a low rotation weight and a cooldown of at least 30 seconds (or three message intervals).
 - **Partnership runs (balls)** includes extras and counts legal balls since the latest recorded wicket. Joining mid-partnership with earlier wickets makes this unknown; enter a correction in the stats editor. Corrections continue with subsequent runs/balls and reset at the next wicket.
@@ -62,7 +64,7 @@ Use **New match / clear scores** between matches. It clears both innings and cap
 | Batting card | 02 · Batting card | Crossing halfway through the scheduled overs |
 | Small innings-break graphic | 03 · Innings break | First innings reaches its over/wicket limit, or End innings |
 | Match summary | 04 · Match summary | 30 seconds after the match ends |
-| Dismissed batter panel | 05 · Last wicket / Save & show wicket graphic | Confirmed outgoing batter near a wicket |
+| Dismissed batter panel | 05 · Last wicket / Save & show wicket graphic | Bluetooth last-wicket details or confirmed outgoing batter near a wicket |
 | Power Surge badge | 06 · Power Surge on/off | Manual only |
 
 Graphics use the corresponding team's custom colour and uploaded logo. The summary contains each innings total, overs, up to four leading batters and bowling figures, plus the result. Asterisks mark known not-out batters. Missing fields are shown as dashes or labelled unavailable.
@@ -75,9 +77,9 @@ The first innings is retained when you select **Start second innings**. Teams, c
 
 ## Statistics and corrections
 
-The current Generic Bluetooth mapping provides batter slots, current bowler, totals and current-over delivery snapshots, but has no confirmed dismissal-method field or authoritative match-end event. Unknown wickets show **Out**, never an invented dismissal. If your scorer sends richer wicket fields, supply a post-wicket receiver log so they can be mapped correctly.
+The Generic Bluetooth mapping provides batter slots, current bowler, totals, current-over delivery snapshots and last-wicket details. Live tests confirmed `LWN` (name), `LWS` (runs and balls), `LWD` (dismissal), `LWB` (bowler) and `LWF` (fielder). Tested dismissal values are `c` (caught), `b` (bowled), `lbw` and `ro` (run-out). These are delta updates: unchanged fields may not be resent at the next wicket. The app retains those values, accepts trailing details and updates the batting card and wicket panel automatically. Run-outs do not attribute the wicket to the bowler. Unknown or absent dismissal types show **Out**, never an invented dismissal; known active batters show **not out**. There is still no confirmed authoritative match-end event.
 
-Use **Confirm wicket details** (or the desktop **Wicket details** shortcut): select the innings/batter, choose Bowled/Caught/LBW/Run out/Stumped/etc., and optionally enter bowler/fielder. **Save dismissal** corrects the scorecard and existing wicket panel; **Save & show wicket graphic** also holds the panel on air. This does not increment the live wicket total. A final wicket with no incoming batter can be identified here.
+**Wicket details · optional correction** (or the desktop **Wicket details** shortcut) is a fallback, not a required confirmation. Select the innings/batter, choose Bowled/Caught/LBW/Run out/Stumped/etc., and optionally enter bowler/fielder. **Save dismissal** corrects the scorecard and existing wicket panel; **Save & show wicket graphic** also holds the panel on air. Explicit dismissal corrections survive repeated Bluetooth snapshots. This does not increment the live wicket total. Last-wicket fields can identify a final wicket without an incoming batter; use the correction form if those fields are unavailable.
 
 Per-batter dots/scoring shots are calculated from complete observed runs/balls changes; fours/sixes also require matching delivery tokens. Missing deliveries, extras-only ambiguous events or late joining leave unknown values as dashes. Enter confirmed dots/fours/sixes in the statistics editor when needed. Strike rate is calculated from known runs/balls. No Fox branding or broadcast footage is included in the application.
 

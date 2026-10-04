@@ -47,6 +47,15 @@ def decode_packet(payload: bytes) -> dict:
         return {'runs':value}
     elif code == 'BTW' and re.fullmatch(r'\d{1,2}', value) and int(value) <= 10:
         return {'wickets':value}
+    elif code in ('LWN', 'LWD', 'LWB', 'LWF') and len(value) <= 160:
+        # Confirmed by caught/bowled/LBW/run-out tests. These are delta fields:
+        # an unchanged bowler/type may not be resent at the next wicket.
+        return {{'LWN':'last_wicket_name', 'LWD':'last_wicket_code',
+                 'LWB':'last_wicket_bowler', 'LWF':'last_wicket_fielder'}[code]:value}
+    elif code == 'LWS':
+        if not value: return {'last_wicket_runs':'', 'last_wicket_balls':''}
+        match = re.fullmatch(r'(\d{1,4})\s*\((\d{1,4})\)', value)
+        if match: return {'last_wicket_runs':match[1], 'last_wicket_balls':match[2]}
     # FTS is intentionally not used as a target: custom/DLS/multi-innings
     # targets cannot safely be inferred by adding one to an opposition total.
     return {}
