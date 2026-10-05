@@ -1,5 +1,7 @@
 "use strict";
 
+if(new URLSearchParams(location.search).get('follow')!=='1'){
+
 const select = document.querySelector('#camera'), video = document.querySelector('#program');
 const empty = document.querySelector('#empty'), status = document.querySelector('#status');
 const graphic = document.querySelector('#graphic'), controls = document.querySelector('#controls');
@@ -292,3 +294,4 @@ window.addEventListener('beforeunload', () => {
   closing = true; clearTimeout(reconnectTimer); clearTimeout(retryTimer); closePeer(); socket?.close();
 });
 connect();
+}

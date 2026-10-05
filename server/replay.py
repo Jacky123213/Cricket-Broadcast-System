@@ -63,6 +63,31 @@ class ReplayStore:
                 (self.root / (key + '.clip')).unlink(missing_ok=True)
                 del self.clips[key]
 
+    async def create_review(self, seconds=60, start_ms=None, end_ms=None):
+        if seconds not in (10,30,60): raise HTTPException(422,'Choose 10, 30 or 60 seconds')
+        async with self.lock:
+            self.cleanup()
+            if len(self.reviews) >= 4: raise HTTPException(429,'Close an existing replay first')
+            current=now_ms()
+            latest={}
+            for clip in self.clips.values():
+                if clip['end_ms']>current-15000:
+                    latest[clip['device_id']]=max(latest.get(clip['device_id'],0),clip['end_ms'])
+            end = min(latest.values())-1 if latest else current
+            start = end - seconds*1000
+            if start_ms is not None or end_ms is not None:
+                if start_ms is None or end_ms is None or not all(math.isfinite(v) for v in (start_ms,end_ms)) or not 0<end_ms-start_ms<=60000 or end_ms>current+1000:
+                    raise HTTPException(422,'Invalid review window')
+                start,end=start_ms,end_ms
+            clips = sorted([dict(c) for c in self.clips.values() if c['end_ms']>start and c['start_ms']<end],key=lambda c:c['start_ms'])
+            if not clips: raise HTTPException(409,'No footage yet. Connect a camera and wait for the first clip.')
+            key = uuid.uuid4().hex
+            result = dict(id=key,start_ms=start,end_ms=end,expires_ms=current+15*60*1000,clips=clips,live_delay_ms=current-end,
+                coverage={id:coverage([c for c in clips if c["device_id"]==id],start,end) for id in {c["device_id"] for c in clips}},
+                audio={id:[p for p in pts if start<=p["t"]<=end] for id,pts in self.audio.items()})
+            self.reviews[key] = result
+            return result
+
     def router(self):
         router = APIRouter(prefix='/api')
 
@@ -154,34 +179,12 @@ class ReplayStore:
                                 if c['device_id'] == device_id and c['end_ms'] > current-30000],
                                key=lambda c:c['start_ms'])
                 return {'server_ms':current, 'clips':clips,
+                        'available_seconds':sum(b-a for a,b in coverage([c for c in self.clips.values() if c['device_id']==device_id],current-90000,current))/1000,
                         'recorder':self.recorder_status.get(device_id)}
 
         @router.post('/replays')
         async def review(seconds: int = 60, start_ms: float | None = None, end_ms: float | None = None):
-            if seconds not in (10,30,60): raise HTTPException(422,'Choose 10, 30 or 60 seconds')
-            async with self.lock:
-                self.cleanup()
-                if len(self.reviews) >= 4: raise HTTPException(429,'Close an existing replay first')
-                current=now_ms()
-                latest={}
-                for clip in self.clips.values():
-                    if clip['end_ms']>current-15000:
-                        latest[clip['device_id']]=max(latest.get(clip['device_id'],0),clip['end_ms'])
-                # Last common uploaded instant avoids manufacturing a missing live tail.
-                end = min(latest.values())-1 if latest else current
-                start = end - seconds*1000
-                if start_ms is not None or end_ms is not None:
-                    if start_ms is None or end_ms is None or not all(math.isfinite(v) for v in (start_ms,end_ms)) or not 0<end_ms-start_ms<=60000 or end_ms>current+1000:
-                        raise HTTPException(422,'Invalid review window')
-                    start,end=start_ms,end_ms
-                clips = sorted([dict(c) for c in self.clips.values() if c['end_ms']>start and c['start_ms']<end],key=lambda c:c['start_ms'])
-                if not clips: raise HTTPException(409,'No footage yet. Connect a camera and wait for the first clip.')
-                key = uuid.uuid4().hex
-                result = dict(id=key,start_ms=start,end_ms=end,expires_ms=current+15*60*1000,clips=clips,live_delay_ms=current-end,
-                    coverage={id:coverage([c for c in clips if c["device_id"]==id],start,end) for id in {c["device_id"] for c in clips}},
-                    audio={id:[p for p in pts if start<=p["t"]<=end] for id,pts in self.audio.items()})
-                self.reviews[key] = result
-                return result
+            return await self.create_review(seconds, start_ms, end_ms)
 
         @router.delete('/replays/{key}')
         async def release(key: str):

@@ -25,6 +25,7 @@ from .power import SleepGuard
 from .scoreboard_state import State as ScoreboardState
 from .bluetooth_receiver import start_receiver
 from .build_info import APP_VERSION, SCOREBOARD_VERSION, UI_BUILD_ID
+from .broadcast_desk import BroadcastDesk
 
 
 mimetypes.init()
@@ -89,11 +90,15 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         redoc_url=None,
     )
     app.include_router(replay.router())
+    desk = BroadcastDesk(replay, manager)
+    app.include_router(desk.router())
     app.include_router(calibration.router())
     app.state.settings = settings
     app.state.database = database
     app.state.devices = manager
     app.state.scoreboard = scoreboard
+    app.state.broadcast_desk = desk
+    app.state.replay_store = replay
 
     @app.middleware("http")
     async def fresh_ui(request, call_next):
@@ -160,6 +165,28 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
     @app.get("/broadcast", include_in_schema=False)
     async def broadcast_output() -> FileResponse:
         return FileResponse(FRONTEND / "broadcast" / "index.html")
+
+    @app.get('/match-day', include_in_schema=False)
+    async def match_day():
+        return FileResponse(FRONTEND / 'match-day' / 'index.html')
+
+    @app.get('/reliability-checklist', include_in_schema=False)
+    async def reliability_checklist(download: bool = False):
+        path = PROJECT_ROOT / 'RELIABILITY_TEST_CHECKLIST.md'
+        if download:
+            return FileResponse(path, media_type='text/markdown', filename=path.name)
+        content = escape(path.read_text(encoding='utf-8'))
+        return HTMLResponse('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>Reliability test checklist · Cricket Broadcast System</title>'
+            '<link rel="stylesheet" href="/static/app-theme.css?v=1.3.0">'
+            '<style>body{margin:24px auto;padding:0 20px;max-width:1000px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.7 ui-monospace,monospace}'
+            'nav{display:flex;gap:20px}@media print{nav{display:none}body,pre{background:white!important;color:black!important}}</style>'
+            '</head><body class="app-ui"><nav><a href="/match-day">Back to Match Day</a>'
+            '<a href="/reliability-checklist?download=true">Save checklist</a></nav>'
+            f'<pre>{content}</pre></body></html>')
+
+    app.mount('/match-day-assets', StaticFiles(directory=FRONTEND / 'match-day'), name='match-day-assets')
 
     @app.get("/broadcast.css", include_in_schema=False)
     async def broadcast_css() -> FileResponse:

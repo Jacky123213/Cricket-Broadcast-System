@@ -4,6 +4,7 @@ const programMode=new URLSearchParams(location.search).get('program')==='1';
 let playoutAt=null;
 window.addEventListener('message',event=>{
  if(programMode&&event.source===window.parent&&event.origin===location.origin&&event.data?.type==='broadcast-time'&&Number.isFinite(event.data.at))playoutAt=event.data.at;
+ if(programMode&&event.source===window.parent&&event.origin===location.origin&&event.data?.type==='broadcast-suspend')playoutAt=null;
 });
 function render(s){
  const d=s.score;
@@ -41,6 +42,7 @@ function render(s){
  const age=s.last_score===null?Infinity:s.server_time-s.last_score;
  $('connection').hidden=!d.visible||graphicShown||s.graphics?.phase==='complete'||s.graphics?.phase==='innings_break'||d.source==='manual'||age<=30;
  $('connection').textContent=s.last_score===null?'WAITING FOR SCORE':'NO SCORE UPDATE · '+Math.floor(age)+'s';
+ if(window.parent!==window)window.parent.postMessage({type:'broadcast-graphics-status',kind:!d.visible?'hidden':s.graphics?.active?.kind||'scorebar',surge:!$('powerSurge').hidden},location.origin);
 }
 async function poll(){try{
  const live=await fetch('/api/state',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!live.ok)throw Error();const state=await live.json();

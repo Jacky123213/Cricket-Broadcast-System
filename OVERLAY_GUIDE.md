@@ -1,5 +1,7 @@
 # Overlay upgrade
 
+For the integrated production desk, shared camera/replay OBS output and per-output health panel, see [MATCH_DAY_GUIDE.md](MATCH_DAY_GUIDE.md). The fixed-camera and graphics-only workflows below remain available.
+
 Restart Studio, open the Scoreboard section and refresh the OBS browser source. The overlay URL stays `/overlay`, and `/broadcast` combines these graphics with the selected DRS camera.
 
 ## OBS on another PC (local HTTPS)

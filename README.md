@@ -1,6 +1,6 @@
 # Cricket Broadcast System
 
-Current release: **1.4.0** · Scoreboard graphics **0.7.0** · DRS engine **0.15.2**.
+Current release: **1.5.0** · Scoreboard graphics **0.7.1** · DRS engine **0.15.2**.
 
 Backyard Cricket Studio combines **Backyard DRS Replay Studio 0.15.2** and **Backyard Scoreboard 0.2** into one local Windows application.
 
@@ -8,6 +8,8 @@ The PC runs a native desktop window with Replay Studio, Scoreboard, Settings and
 
 ## Features
 
+- Match Day production desk: silent preview, shared camera cuts/live/replay controls, graphics and actual output health, with setup/corrections/troubleshooting separate.
+- Browser-specific decoded playback/audio telemetry: actual delay, coverage/headroom, frame/late/decode/request counters, score age and displayed graphics; stale/unavailable readings are clearly labelled.
 - Multi-camera WebRTC wall and synchronized rolling replay inherited from DRS 0.15.2.
 - Play-Cricket Scorer Generic (Enhanced) Bluetooth receiver and manual broadcast overlay from Scoreboard 0.2.
 - One process, HTTPS port and desktop window.
@@ -52,6 +54,8 @@ ESP32-CAM and typical Arduino camera boards usually expose MJPEG/JPEG rather tha
 
 ## Overlay + replay workflow
 
+For shared production control, open **Match Day** and copy its OBS shared-program link to the second PC. See [MATCH_DAY_GUIDE.md](MATCH_DAY_GUIDE.md) for setup and measurement limits, and [RELIABILITY_TEST_CHECKLIST.md](RELIABILITY_TEST_CHECKLIST.md) for the physical camera/OBS soak test.
+
 Keep the umpire camera connected with its replay recorder running. Open `/broadcast`, select the program camera and copy its clean OBS link. This plays native recorded video and its microphone sound about five seconds behind, with graphics matched to the displayed clip timestamp. The umpire view is still live. Sound is requested by default; if your browser blocks autoplay, click **Enable camera audio** (in OBS, use **Interact**). The camera microphone can be enabled while connected; the change reaches broadcast after the buffer delay.
 
 Alternatively, place `/overlay` above a separate video/audio source in OBS. `/overlay` is graphics-only and has no camera sound. Graphics are not burned into DRS replay recordings. See [OVERLAY_GUIDE.md](OVERLAY_GUIDE.md) for the separate-PC workflow and audio setup.
@@ -68,7 +72,7 @@ Runtime data, certificates, logs, local environments and replay buffers are excl
 
 No licence is provided at present. Public availability does not grant an open-source licence; a licence can be added later.
 
-See [RELEASE_1_4_0.md](RELEASE_1_4_0.md) for this release's changes and upgrade instructions.
+See [RELEASE_1_5_0.md](RELEASE_1_5_0.md) for this release's changes and upgrade instructions.
 
 ## Broadcast graphics
 
