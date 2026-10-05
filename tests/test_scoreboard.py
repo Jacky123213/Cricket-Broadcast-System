@@ -13,8 +13,12 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(decode_packet(b'OVB15'), {'overs':'15.0'})
         self.assertEqual(decode_packet(b'B1S24'), {'batter1_runs':'24'})
     def test_invalid_or_unmapped_is_not_guessed(self):
-        for packet in (b'OVB4.6', b'BTS10/99', b'BTSoops', b'FTS123/4', b'B1Sx', b'\xff', b'BTS1/0OVB0.1'):
+        for packet in (b'OVB4.6', b'BTS11/99', b'BTS0/4', b'BTS4/0', b'BTSoops', b'FTS123/4', b'B1Sx', b'\xff', b'BTS1/0OVB0.1'):
             self.assertEqual(decode_packet(packet), {})
+
+    def test_unambiguous_wickets_first_score(self):
+        self.assertEqual(decode_packet(b'BTS9/202'), {'runs':'202','wickets':'9'})
+        self.assertEqual(decode_packet(b'BTS10/99'), {'runs':'99','wickets':'10'})
 
 class EnhancedTests(unittest.TestCase):
     def test_observed_wicket_detail_fields(self):
@@ -75,6 +79,31 @@ class StateTests(unittest.TestCase):
     def test_invalid_packet_preserves_score(self):
         self.state.receive(b'BTS95/4');self.state.receive(b'BTSoops')
         self.assertEqual(self.state.snapshot()['score']['runs'],'95')
+
+    def test_small_scores_calibrate_order_without_inventing_wickets(self):
+        for packet in (b'BTS0/0', b'BTR0', b'BTW0', b'OVB0.2', b'BTS0/4'):
+            self.state.receive(packet)
+        # No safe convention yet. The ambiguous pair cannot create 4 wickets.
+        self.assertEqual(self.state.snapshot()['score']['wickets'],'0')
+        self.state.receive(b'BTR4')
+        score=self.state.snapshot()['score']
+        self.assertEqual((score['runs'],score['wickets']),('4','0'))
+        self.state.receive(b'BTS0/5');self.state.receive(b'BTR5')
+        self.assertEqual(self.state.snapshot()['score']['wickets'],'0')
+        # A genuine wicket, followed by an undo, uses the same confirmed order.
+        self.state.receive(b'BTS1/5');self.state.receive(b'BTW1')
+        self.assertEqual(self.state.snapshot()['score']['wickets'],'1')
+        self.state.receive(b'BTS0/4');self.state.receive(b'BTR4');self.state.receive(b'BTW0')
+        self.assertEqual(self.state.snapshot()['score']['wickets'],'0')
+
+    def test_runs_first_and_scorer_convention_change(self):
+        for packet in (b'BTS4/0', b'BTR4', b'BTW0', b'BTS5/0', b'BTR5'):
+            self.state.receive(packet)
+        self.assertEqual((self.state.data['runs'],self.state.data['wickets']),('5','0'))
+        self.state.receive(b'BTS0/6');self.state.receive(b'BTR6')
+        self.assertEqual((self.state.data['runs'],self.state.data['wickets']),('6','0'))
+        self.state.receive(b'BTS7/7')
+        self.assertEqual((self.state.data['runs'],self.state.data['wickets']),('6','0'),'BTS cannot overwrite dedicated score fields')
     def test_restore_clears_live_numbers(self):
         self.state.save({'runs':'70','team1':'TEST','last_wicket_name':'Player A','last_wicket_code':'b'})
         restored=State(self.temp.name).snapshot()['score']

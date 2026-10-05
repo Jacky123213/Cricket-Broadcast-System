@@ -1,6 +1,6 @@
 # Cricket Broadcast System
 
-Current release: **1.1.1** · Scoreboard graphics **0.4.1** · DRS engine **0.15.2**.
+Current release: **1.1.2** · Scoreboard graphics **0.4.2** · DRS engine **0.15.2**.
 
 Backyard Cricket Studio combines **Backyard DRS Replay Studio 0.15.2** and **Backyard Scoreboard 0.2** into one local Windows application.
 
@@ -12,6 +12,7 @@ The PC runs a native desktop window with Replay Studio, Scoreboard, Settings and
 - Play-Cricket Scorer Generic (Enhanced) Bluetooth receiver and manual broadcast overlay from Scoreboard 0.2.
 - One process, HTTPS port and desktop window.
 - Responsive camera, umpire, scoreboard and overlay pages.
+- Live camera battery percentage, charging and low-battery indicators beside device names on the umpire console, where the camera browser supports battery reporting. Unsupported browsers show **Battery unavailable**.
 - Physical camera dropdown after permission, with Apple, Android and Chromium-friendly selection.
 - Raspberry Pi browser-camera support; documented ESP32/Arduino live-source limits.
 - OBS-ready transparent overlay at `/overlay`.
@@ -63,7 +64,7 @@ Runtime data, certificates, logs, local environments and replay buffers are excl
 
 No licence is provided at present. Public availability does not grant an open-source licence; a licence can be added later.
 
-See [RELEASE_1_1_1.md](RELEASE_1_1_1.md) for this release's changes and upgrade instructions.
+See [RELEASE_1_1_2.md](RELEASE_1_1_2.md) for this release's changes and upgrade instructions.
 
 ## Broadcast graphics
 

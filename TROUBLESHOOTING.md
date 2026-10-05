@@ -14,7 +14,19 @@ Use 720p / 30 FPS, keep every camera page visible and prevent device sleep. Test
 
 ## Broadcast shows no DRS camera
 
-After updating to Studio 1.1.0, restart Studio and refresh **both** the camera device page and OBS Browser Source. Use the LAN `/broadcast` URL, not `/overlay` (graphics only). Connect the camera, leave its replay recorder running, select it in **Program camera**, and wait for **DELAYED 5.x s**. Initial buffering needs clock synchronisation and the first encoded clip. If buffering continues, press **Start/retry replay** on the camera and check its recorder diagnostic. **Retry video** restarts the broadcast player. A copied clean link intentionally waits for its pinned camera while that device is offline.
+After updating to Studio 1.1.2, restart Studio and refresh **every** camera page, the umpire console and OBS Browser Source. Use the LAN `/broadcast` URL, not `/overlay` (graphics only). Connect the camera, leave its replay recorder running, select it in **Program camera**, and wait for **DELAYED 5.x s**. Initial buffering needs clock synchronisation and enough encoded footage for the delay. If buffering continues, press **Start/retry replay** on the camera and check its recorder diagnostic. **Retry video** restarts the broadcast player. A copied clean link intentionally waits for its pinned camera while that device is offline.
+
+## Runs appear as wickets in the second innings
+
+Studio 1.1.2 confirms combined-score order using separate Bluetooth runs/wickets packets, supporting both runs-first and wickets-first display formats. After restarting, use **Refresh scoreboard** in Play-Cricket Scorer to resend current totals. Existing incorrect historical statistics are not silently deleted. If an earlier false all-out ended the match, use **Undo match finish** before refreshing, then correct affected stats in **Edit stats**.
+
+## Camera says video link failed while video still works
+
+Studio 1.1.2 ignores cancelled negotiations from replaced viewer links and reports each viewer independently. Refresh all camera/umpire/OBS pages after restarting. A genuine failed viewer shows an inline retry message without stopping another working viewer or the replay recorder. If no viewer works, reconnect the camera and check network reachability.
+
+## Camera battery is unavailable
+
+Battery status comes from the camera device's browser, not the umpire tablet. Android Chrome/Edge can report percentage and charging over trusted HTTPS. Safari/iPhone/iPad browsers that do not expose the Battery Status API show **Battery unavailable**; the app cannot read that device battery through the browser. Denied access also stays unavailable. Battery telemetry is live only, is not saved with devices or replay footage, and does not restart a video connection.
 
 ## Camera microphone is enabled but OBS is silent
 

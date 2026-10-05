@@ -262,6 +262,12 @@ p { color: var(--muted); line-height: 1.6; }
 .replay-tile video { width:100%;aspect-ratio:16/9;object-fit:contain;background:black; }
 .replay-tile p {font-size:12px;}
 #replayWall {padding:14px;}
+.device-name-line {display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0;}
+.device-name-line .camera-name {margin:0;overflow-wrap:anywhere;}
+.battery-badge {display:inline-flex;align-items:center;white-space:nowrap;border:1px solid #ffffff35;border-radius:4px;padding:2px 5px;font-size:11px;line-height:1.4;color:#e4edf0;}
+.battery-badge.charging {color:#a9e765;border-color:#a9e76566;}
+.battery-badge.low {color:#ffbd6e;border-color:#ffbd6e88;}
+.battery-badge.unavailable {color:#a6b3c1;font-size:10px;}
 .camera-tile video:not([hidden]) ~ .camera-placeholder {display:none;}
 /* Broadcast review desk */
 .match-desk{display:grid;grid-template-columns:1fr 180px 1fr 1fr;gap:24px;align-items:center;padding:24px;margin-bottom:16px;border-top:3px solid #39dfbf}

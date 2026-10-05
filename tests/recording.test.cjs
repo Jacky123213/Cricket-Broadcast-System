@@ -43,7 +43,7 @@ test('recorder watchdog reports missing browser stop callback',async()=>{
  c.MediaRecorder=Recorder;c.window.MediaRecorder=Recorder;
  const rec=new c.window.DRSRecorder('p',{},m=>messages.push(m));
  rec.clock.sync=async()=>{rec.clock.checked=100000;rec.clock.uncertainty=2;};await rec.start();
- timers.find(t=>t.ms===5000).fn();timers.find(t=>t.ms===10000).fn();
+ timers.find(t=>t.ms===3000).fn();timers.find(t=>t.ms===10000).fn();
  assert.ok(messages.some(m=>m.includes('Recorder stalled')));assert.equal(rec.running,false);
 });
 test('new recorder starts one second before previous recording stops',async()=>{
@@ -53,8 +53,8 @@ test('new recorder starts one second before previous recording stops',async()=>{
  c.MediaRecorder=Recorder;c.window.MediaRecorder=Recorder;
  const r=new c.window.DRSRecorder('p',{getVideoTracks:()=>[{getSettings:()=>({frameRate:30})}]},()=>{});
  r.clock.sync=async()=>{r.clock.checked=100000;r.clock.uncertainty=2;};await r.start();
- t=4000;timers.find(t=>t.ms===4000).fn();assert.equal(records.length,2);assert.ok(records.every(r=>r.state==='recording'));
- t=5000;timers.find(t=>t.ms===5000).fn();assert.equal(records[0].state,'inactive');assert.equal(records[1].state,'recording');r.stop();
+ t=2000;timers.find(t=>t.ms===2000).fn();assert.equal(records.length,2);assert.ok(records.every(r=>r.state==='recording'));
+ t=3000;timers.find(t=>t.ms===3000).fn();assert.equal(records[0].state,'inactive');assert.equal(records[1].state,'recording');r.stop();
 });
 
 test('recording bitrate scales with capture and stays bounded',async()=>{

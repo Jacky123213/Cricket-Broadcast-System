@@ -7,6 +7,62 @@ SERVICE_UUID = '5a0d6a15-b664-4304-8530-3a0ec53e5bc1'
 WRITE_UUID = 'df531f62-fc0b-40ce-81b2-32a6262ea440'
 
 
+def combined_score(payload: bytes):
+    """Read the two score values without assuming their display order."""
+    try: text = payload.decode('utf-8').strip('\x00\r\n ')
+    except UnicodeDecodeError: return None
+    if not text.startswith('BTS'): return None
+    match = re.fullmatch(r'(\d{1,4})\s*/\s*(\d{1,4})(?:\s*&.*)?', text[3:].strip())
+    if not match or min(int(match[1]), int(match[2])) > 10: return None
+    return match[1], match[2]
+
+
+def score_fields(pair, order=None):
+    a, b = pair
+    # Both display conventions occur in captured PCS packets. Small scores
+    # cannot identify the order: wait for BTR/BTW instead of inventing wickets.
+    if int(a) > 10: order = 'runs_first'
+    elif int(b) > 10: order = 'wickets_first'
+    elif int(a) == int(b): return {'runs':a, 'wickets':b}
+    if order not in ('runs_first', 'wickets_first'): return {}
+    runs, wickets = (a,b) if order == 'runs_first' else (b,a)
+    return {'runs':runs, 'wickets':wickets} if int(wickets) <= 10 else {}
+
+
+class ScoreDecoder:
+    """Calibrate combined-score order against dedicated authoritative writes."""
+    def __init__(self):
+        self.order = None
+        self.combined = None
+        self.combined_at = None
+        self.dedicated = set()
+
+    def fallback(self, fields):
+        # Once BTR/BTW is present, that field has a single authoritative source.
+        # A display-format change in BTS must never transiently create wickets.
+        return {key:value for key,value in fields.items() if key not in self.dedicated}
+
+    def decode(self, payload, now):
+        pair = combined_score(payload)
+        if pair:
+            self.combined, self.combined_at = pair, now
+            if int(pair[0]) > 10: self.order = 'runs_first'
+            elif int(pair[1]) > 10: self.order = 'wickets_first'
+            return self.fallback(score_fields(pair, self.order))
+        fields = decode_packet(payload)
+        key = 'runs' if payload[:3] == b'BTR' else 'wickets' if payload[:3] == b'BTW' else None
+        if key in fields: self.dedicated.add(key)
+        if self.combined and now - self.combined_at <= 1.2:
+            # BTR/BTW immediately follow BTS in scorer delta batches. A new
+            # dedicated value also corrects a convention changed by the scorer.
+            if key in fields:
+                value = int(fields[key]); a, b = map(int, self.combined)
+                if (a == value) != (b == value):
+                    self.order = ('runs_first' if a == value else 'wickets_first') if key == 'runs' else ('wickets_first' if a == value else 'runs_first')
+                    fields = {**self.fallback(score_fields(self.combined, self.order)), **fields}
+        return fields
+
+
 def decode_packet(payload: bytes) -> dict:
     try:
         text = payload.decode('utf-8').strip('\x00\r\n ')
@@ -14,10 +70,8 @@ def decode_packet(payload: bytes) -> dict:
         return {}
     code, value = text[:3], text[3:].strip()
     if code == 'BTS':
-        # Multiple innings may be separated by '&'; don't merge innings.
-        match = re.fullmatch(r'(\d{1,4})\s*/\s*(\d{1,2})(?:\s*&.*)?', value)
-        if match and int(match[2]) <= 10:
-            return {'runs': match[1], 'wickets': match[2]}
+        pair = combined_score(payload)
+        return score_fields(pair) if pair else {}
     elif code == 'OVB' and re.fullmatch(r'\d{1,3}(?:\.[0-5])?', value):
         return {'overs': value if '.' in value else value + '.0'}
     elif code in ('B1S', 'B2S') and re.fullmatch(r'\d{1,4}', value):

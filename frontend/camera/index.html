@@ -90,6 +90,7 @@
         <div class="stat"><div id="heartbeatValue" class="stat-value">0</div><div class="stat-label">Heartbeats</div></div>
         <div class="stat"><div id="streamStatusValue" class="stat-value">READY</div><div class="stat-label">Video link</div></div>
       </div>
+      <p id="videoLinkNote" role="status">Camera capture and replay are independent of live viewer links.</p>
       <button id="disconnectButton" class="btn btn-danger" style="margin-top:16px" type="button">Disconnect</button>
     </section>
   <section class="panel side-panel"><button type="button" class="btn" id="enableAudio">Enable audio analysis / test mic</button><button type="button" class="btn" id="stopAudio">Stop analysis</button><p id="audioStatus">Tap to allow microphone access and speak. A moving dBFS reading confirms local capture. A connected camera also sends this mic to replay and broadcast. Stop analysis leaves camera sound on; choose Microphone → Disabled to stop capture.</p></section></main>
@@ -114,7 +115,8 @@
     }());
   </script>
   <script defer src="/static/common.js?v=0.15.2"></script>
-  <script defer src="/static/recording.js?v=1.1.0"></script>
-  <script defer src="/static/audio.js?v=1.1.0"></script><script defer src="/static/camera-optics.js?v=0.15.2"></script><script defer src="/static/camera.js?v=1.1.0"></script>
+  <script defer src="/static/battery.js?v=1.1.2"></script>
+  <script defer src="/static/recording.js?v=1.1.2"></script>
+  <script defer src="/static/audio.js?v=1.1.0"></script><script defer src="/static/camera-optics.js?v=0.15.2"></script><script defer src="/static/camera.js?v=1.1.2"></script>
 </body>
 </html>

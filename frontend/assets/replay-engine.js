@@ -4,7 +4,7 @@
  function fit(sw,sh,w,h){const s=Math.min(w/sw,h/sh);return {x:(w-sw*s)/2,y:(h-sh*s)/2,width:sw*s,height:sh*s};}
  function wait(video,event,action){return new Promise((resolve,reject)=>{let timer;const done=e=>{clearTimeout(timer);video.removeEventListener(event,ok);video.removeEventListener('error',bad);video.removeEventListener('drs-cancel',cancel);e?reject(e):resolve();};const ok=()=>done(),bad=()=>done(Error('Clip could not be decoded')),cancel=()=>done(Error('Player closed'));video.addEventListener(event,ok);video.addEventListener('error',bad);video.addEventListener('drs-cancel',cancel);timer=setTimeout(()=>done(Error('Clip loading timed out')),6000);try{action();}catch(e){done(e);}});}
  class AnglePlayer{
-  constructor(clips,makeVideo,status=()=>{}){this.clips=clips;this.status=status;this.slots=[0,1].map(()=>({video:makeVideo(),clip:null,promise:null}));this.active=null;this.desired=null;this.busy=false;this.closed=false;this.lastCorrection=0;this.failures=new Map();this.muted=true;this.ready=false;this.playing=false;this.waiting=false;this.error=null;}
+  constructor(clips,makeVideo,status=()=>{},options={}){this.clips=clips;this.status=status;this.continuous=Boolean(options.continuous);this.slots=[0,1].map(()=>({video:makeVideo(),clip:null,promise:null}));this.active=null;this.desired=null;this.busy=false;this.closed=false;this.lastCorrection=0;this.failures=new Map();this.muted=true;this.ready=false;this.playing=false;this.waiting=false;this.error=null;}
   get video(){return this.active?.video||this.slots[0].video;}
   end(slot){return Math.min(slot.clip.end_ms,Number.isFinite(slot.video.duration)?slot.clip.start_ms+slot.video.duration*1000:Infinity);}
   covers(slot,t){return slot?.clip&&slot.clip.start_ms<=t&&t<this.end(slot);}
@@ -25,12 +25,12 @@
    try{
     if(!this.covers(this.active,t)){
      this.ready=false;this.waiting=true;this.error=null;this.status('Loading next frame…');
-     if(this.active)this.active.video.pause();
+     if(this.active&&!this.continuous)this.active.video.pause();
      const candidates=[...this.clips].reverse().filter(c=>c.start_ms<=t&&t<c.end_ms&&(this.failures.get(c.id)||0)<Date.now());
      let chosen=null;
-     for(const clip of candidates){const slot=this.slots.find(s=>s.clip?.id===clip.id)||this.slots.find(s=>s!==this.active)||this.slots[0];try{await this.load(slot,clip);if(this.closed)return;if(!this.covers(slot,t))continue;await this.seek(slot,t);if(this.playing&&slot.video.readyState<3)await wait(slot.video,'canplay',()=>{});chosen=slot;break;}catch(e){this.failures.set(clip.id,Date.now()+10000);this.error=e.message;this.status(e.message);}}
-     if(!chosen){if(this.active)this.active.video.hidden=true;const exists=this.clips.some(c=>c.start_ms<=t&&t<c.end_ms);this.error=exists?(this.error||'Recorded clip cannot provide this frame'):null;this.status(exists?'Clip unavailable — press Play to retry':'No footage at this time');return;}
-     if(this.active&&this.active!==chosen)this.active.video.hidden=true;this.active=chosen;this.error=null;
+     for(const clip of candidates){const slot=this.slots.find(s=>s.clip?.id===clip.id)||this.slots.find(s=>s!==this.active)||this.slots[0];try{await this.load(slot,clip);if(this.closed)return;if(!this.covers(slot,t))continue;const prepared=this.continuous&&!force&&slot.preparedFor===clip.id&&Math.abs(clip.start_ms+slot.video.currentTime*1000-t)<=250;if(!prepared)await this.seek(slot,t);if(this.playing&&slot.video.readyState<3)await wait(slot.video,'canplay',()=>{});chosen=slot;break;}catch(e){this.failures.set(clip.id,Date.now()+10000);this.error=e.message;this.status(e.message);}}
+     if(!chosen){if(this.active){this.active.video.pause();if(!this.continuous)this.active.video.hidden=true;}const exists=this.clips.some(c=>c.start_ms<=t&&t<c.end_ms);this.error=exists?(this.error||'Recorded clip cannot provide this frame'):null;this.status(exists?'Clip unavailable — press Play to retry':'No footage at this time');return;}
+     if(this.active&&this.active!==chosen){this.active.video.pause();this.active.video.hidden=true;}this.active=chosen;this.error=null;
     }else if(force){this.waiting=true;this.active.video.pause();await this.seek(this.active,t);}
     if(this.closed)return;
     // A scrub arriving during a network load supersedes this old frame.
@@ -38,8 +38,9 @@
     const v=this.active.video;if(this.playing&&v.readyState<3){this.waiting=true;this.status('Buffering this angle…');await wait(v,'canplay',()=>{});}v.hidden=false;v.playbackRate=rate;v.muted=this.muted;this.ready=true;
     if(this.playing){
      const drift=(this.active.clip.start_ms+v.currentTime*1000)-t;
-     if(performance.now()-this.lastCorrection>1000&&Math.abs(drift)>300){this.lastCorrection=performance.now();await this.seek(this.active,t);}
-     else if(Math.abs(drift)>60&&Math.abs(drift)<=300)v.playbackRate=rate*Math.max(.92,Math.min(1.08,1-drift/1500));
+     const correctionLimit=this.continuous?1500:300;
+     if(performance.now()-this.lastCorrection>1000&&Math.abs(drift)>correctionLimit){this.lastCorrection=performance.now();await this.seek(this.active,t);}
+     else if(Math.abs(drift)>60&&Math.abs(drift)<=correctionLimit)v.playbackRate=rate*Math.max(this.continuous ? .95 : .92,Math.min(this.continuous?1.05:1.08,1-drift/1500));
      this.play(this.active);
     }else v.pause();
     this.status(v.readyState<3&&this.playing?'Buffering this angle…':'');

@@ -69,9 +69,11 @@
       try {recorder.start();}
       catch(e){this.records.delete(entry);this.report('Overlap not supported or encoder busy: '+e.message);this.nextTimer=setTimeout(()=>this.next(),1000);return;}
       this.report('Recording · '+this.mime+' · target '+(bitrate/1000000).toFixed(1)+' Mbps');
-      // New recorder begins one second BEFORE this one stops; no stop/start hole.
-      this.nextTimer=setTimeout(()=>this.next(),4000);
-      entry.stopTimer=setTimeout(()=>this.finish(entry),5000);
+      // Three-second clips arrive well before five-second delayed playout needs
+      // them. Keep a one-second overlap for decoder handover, without changing
+      // capture resolution/bitrate or separating audio from its video.
+      this.nextTimer=setTimeout(()=>this.next(),2000);
+      entry.stopTimer=setTimeout(()=>this.finish(entry),3000);
     }
     finish(entry){
       if(!['recording','paused'].includes(entry.recorder.state))return;

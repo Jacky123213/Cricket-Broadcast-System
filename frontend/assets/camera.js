@@ -8,6 +8,7 @@ const previewEmpty = document.querySelector("#previewEmpty");
 const pill = document.querySelector("#connectionPill");
 const connectionCard = document.querySelector("#connectionCard");
 const peerConnections = new Map();
+const viewerErrors = new Map();
 let socket = null;
 let heartbeatTimer = null;
 let heartbeatSequence = 0;
@@ -20,6 +21,11 @@ let rollingRecorder = null;
 let recordingGeneration = 0;
 let microphoneBusy = false;
 const watchedMicrophones = new WeakSet();
+let battery = null;
+const stopBattery = window.DRSBattery?.watch(value => {
+  battery = value;
+  sendHeartbeat();
+});
 
 function liveMicrophones() {
   return previewStream?.getAudioTracks().filter(track => track.readyState === 'live' && track.enabled !== false) || [];
@@ -153,8 +159,23 @@ async function testCamera() {
 }
 
 function closePeers() {
-  for (const peer of peerConnections.values()) peer.close();
+  const peers = [...peerConnections.values()];
   peerConnections.clear();
+  viewerErrors.clear();
+  for (const peer of peers) peer.close();
+  refreshVideoStatus();
+}
+
+function refreshVideoStatus() {
+  const peers = [...peerConnections.values()];
+  const connected = peers.filter(peer => peer.connectionState === 'connected').length;
+  const pending = peers.filter(peer => ['new','connecting','disconnected'].includes(peer.connectionState)).length;
+  const value = document.querySelector('#streamStatusValue'), note = document.querySelector('#videoLinkNote');
+  if (socket?.readyState !== WebSocket.OPEN) { value.textContent = 'OFFLINE'; note.textContent = 'Connect this camera to Studio.'; return; }
+  value.textContent = connected ? 'LIVE · '+connected : pending ? 'CONNECTING' : viewerErrors.size ? 'VIEWER RETRY' : 'READY';
+  note.textContent = connected ? connected+' live viewer link'+(connected===1?'':'s')+' working.' : 'Camera capture and replay are independent of live viewer links.';
+  if (pending) note.textContent += ' '+pending+' viewer link'+(pending===1?' is':'s are')+' connecting/reconnecting.';
+  if (viewerErrors.size) note.textContent += ' A viewer link needs retrying; other viewers and replay are not stopped. '+[...viewerErrors.values()].at(-1);
 }
 
 async function handleSignal(message) {
@@ -164,13 +185,21 @@ async function handleSignal(message) {
   let peer = peerConnections.get(consoleId);
 
   if (signal.description?.type === "offer") {
-    if (peer) peer.close();
+    const previous = peer;
     peer = new RTCPeerConnection({ iceServers: [] });
     peer.pendingCandidates = [];
     peer.signalSession = typeof signal.session_id === 'string' ? signal.session_id : '';
     peerConnections.set(consoleId, peer);
+    // Replacing one viewer must not let the old peer overwrite the status or
+    // report a negotiation cancelled by the replacement as a camera failure.
+    previous?.close();
+    viewerErrors.delete(consoleId);
+    refreshVideoStatus();
+    const signalSocket = socket;
+    const currentPeer = () => peerConnections.get(consoleId) === peer && socket === signalSocket && socket?.readyState === WebSocket.OPEN;
+    try {
     const stream = await ensureMedia();
-    if (peerConnections.get(consoleId) !== peer) return;
+    if (!currentPeer()) return;
     for (const track of stream.getTracks()) peer.addTrack(track, stream);
     peer.addEventListener("icecandidate", event => {
       if (event.candidate && peerConnections.get(consoleId) === peer && socket?.readyState === WebSocket.OPEN) {
@@ -183,25 +212,35 @@ async function handleSignal(message) {
     });
     peer.addEventListener("connectionstatechange", () => {
       if (peerConnections.get(consoleId) !== peer) return;
-      document.querySelector("#streamStatusValue").textContent = peer.connectionState.toUpperCase();
+      if (peer.connectionState === 'connected') viewerErrors.delete(consoleId);
       if (["failed", "closed"].includes(peer.connectionState)) {
         peerConnections.delete(consoleId);
+        if (peer.connectionState === 'failed') { viewerErrors.set(consoleId,'Live viewer connection failed.'); peer.close(); }
       }
+      refreshVideoStatus();
     });
     await peer.setRemoteDescription(signal.description);
-    if (peerConnections.get(consoleId) !== peer) return;
+    if (!currentPeer()) return;
     for (const candidate of peer.pendingCandidates.splice(0)) {
       await peer.addIceCandidate(candidate);
+      if (!currentPeer()) return;
     }
     const answer = await peer.createAnswer();
-    if (peerConnections.get(consoleId) !== peer) return;
+    if (!currentPeer()) return;
     await peer.setLocalDescription(answer);
-    if (peerConnections.get(consoleId) !== peer || socket?.readyState !== WebSocket.OPEN) return;
+    if (!currentPeer()) return;
     socket.send(JSON.stringify({
       type: "webrtc_signal",
       console_id: consoleId,
       signal: { description: peer.localDescription, ...(peer.signalSession ? {session_id: peer.signalSession} : {}) },
     }));
+    } catch (error) {
+      if (!currentPeer()) return; // Cancelled/replaced/disconnected negotiation.
+      peerConnections.delete(consoleId);peer.close();
+      viewerErrors.set(consoleId,'Negotiation: '+error.message);
+      refreshVideoStatus();
+      console.warn('Current live viewer negotiation failed',error);
+    }
     return;
   }
 
@@ -211,7 +250,7 @@ async function handleSignal(message) {
       if (peer.remoteDescription) await peer.addIceCandidate(signal.candidate);
       else peer.pendingCandidates.push(signal.candidate);
     }
-    catch (error) { console.warn("Rejected ICE candidate", error); }
+    catch (error) { if (peerConnections.get(consoleId) === peer) console.warn("Rejected ICE candidate", error); }
   }
 }
 
@@ -230,14 +269,16 @@ async function connect() {
   localStorage.setItem("drs_camera_name", name);
   localStorage.setItem("drs_camera_role", role);
   setStatus(false, "Connecting…");
-  socket = new WebSocket(websocketUrl("/ws/camera"));
+  const nextSocket = new WebSocket(websocketUrl("/ws/camera"));
+  socket = nextSocket;
   document.querySelector("#cameraFacing").disabled=true;
 
   socket.addEventListener("open", () => {
+    if (socket !== nextSocket) return;
     const videoTrack = previewStream.getVideoTracks()[0];
     const videoSettings = videoTrack?.getSettings?.() || {};
     socket.send(JSON.stringify({
-      type: "register", device_id: deviceId, name, role,
+      type: "register", device_id: deviceId, name, role, battery,
       settings: {
         resolution: `${videoSettings.width || "?"}x${videoSettings.height || "?"}`,
         fps: videoSettings.frameRate || Number(document.querySelector("#fps").value),
@@ -253,9 +294,11 @@ async function connect() {
   });
 
   socket.addEventListener("message", async event => {
+    if (socket !== nextSocket) return;
     const message = JSON.parse(event.data);
     if (message.type === "registered") {
       setStatus(true, "Camera live");
+      refreshVideoStatus();
       startReplayRecording();
       document.querySelector("#connectedName").textContent = name;
       const interval = (message.heartbeat_interval_seconds || 4) * 1000;
@@ -273,7 +316,12 @@ async function connect() {
     }
     if (message.type === "webrtc_signal") {
       try { await handleSignal(message); }
-      catch (error) { showToast(`Video link failed: ${error.message}`); }
+      catch (error) {
+        if (socket !== nextSocket) return;
+        viewerErrors.set(message.console_id || 'viewer', 'Negotiation: '+error.message);
+        refreshVideoStatus();
+        console.warn('Live viewer signalling failed',error);
+      }
     }
     if (message.type === "configuration") {
       document.querySelector("#cameraName").value = message.name;
@@ -286,6 +334,7 @@ async function connect() {
   });
 
   socket.addEventListener("close", event => {
+    if (socket !== nextSocket) return;
     clearInterval(heartbeatTimer);
     rollingRecorder?.stop();
     stopAudio?.();stopAudio=null;
@@ -294,14 +343,14 @@ async function connect() {
     document.querySelector("#streamStatusValue").textContent = "OFFLINE";
     if (!intentionalDisconnect) showToast(event.reason || "Connection lost — reconnect when ready");
   });
-  socket.addEventListener("error", () => showToast("Could not reach the DRS server"));
+  socket.addEventListener("error", () => { if (socket === nextSocket) showToast("Could not reach the DRS server"); });
 }
 
 function sendHeartbeat() {
   if (socket?.readyState !== WebSocket.OPEN) return;
   const sequence = ++heartbeatSequence;
   heartbeatSentAt.set(sequence, performance.now());
-  socket.send(JSON.stringify({ type: "heartbeat", sequence, client_time_ms: Date.now() }));
+  socket.send(JSON.stringify({ type: "heartbeat", sequence, client_time_ms: Date.now(), battery }));
 }
 
 form.addEventListener("submit", event => { event.preventDefault(); connect(); });
@@ -312,6 +361,7 @@ document.querySelector("#disconnectButton").addEventListener("click", () => {
   socket?.close(1000, "Device disconnected");
 });
 window.addEventListener("beforeunload", () => {
+  stopBattery?.();
   closePeers();
   optics?.close();
   previewStream?.getTracks().forEach(track => track.stop());

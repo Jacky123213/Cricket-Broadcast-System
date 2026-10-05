@@ -100,6 +100,62 @@ def test_device_can_be_renamed_and_disconnected(tmp_path: Path) -> None:
             assert response.status_code == 200
 
 
+def test_battery_registration_and_heartbeat_are_live_only(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        with client.websocket_connect('/ws/umpire?console_id=battery-console') as umpire:
+            assert umpire.receive_json()['devices'] == []
+            with client.websocket_connect('/ws/camera') as camera:
+                camera.send_json({'type': 'register', 'device_id': 'battery-phone', 'name': 'Battery Phone',
+                                  'role': 'OTHER', 'settings': {'media_revision': 7},
+                                  'battery': {'level': 45, 'charging': False}})
+                assert umpire.receive_json()['devices'][0]['battery'] == {'level': 45, 'charging': False}
+                assert camera.receive_json()['type'] == 'registered'
+                camera.send_json({'type': 'heartbeat', 'sequence': 1, 'battery': {'level': 20, 'charging': True}})
+                update = umpire.receive_json()['devices'][0]
+                assert update['battery'] == {'level': 20, 'charging': True}
+                assert update['settings']['media_revision'] == 7
+                assert camera.receive_json()['type'] == 'heartbeat_ack'
+                # Repeated / malformed reports must not invent charge or break capture.
+                for value in [{'level': 20, 'charging': True}, {'level': 101, 'charging': False},
+                              {'level': '70', 'charging': False}, {'level': True, 'charging': True}]:
+                    camera.send_json({'type': 'heartbeat', 'sequence': 2, 'battery': value})
+                    assert camera.receive_json()['type'] == 'heartbeat_ack'
+                    device = client.get('/api/devices').json()['devices'][0]
+                    assert device['battery'] == {'level': 20, 'charging': True}
+                camera.send_json({'type': 'heartbeat', 'battery': None})
+                assert umpire.receive_json()['devices'][0]['battery'] is None
+                assert camera.receive_json()['type'] == 'heartbeat_ack'
+            assert umpire.receive_json()['devices'] == []
+        offline = client.get('/api/devices').json()['devices'][0]
+        assert offline.get('battery') is None
+        assert 'battery' not in offline['settings']
+        with client.websocket_connect('/ws/camera') as camera:
+            camera.send_json({'type': 'register', 'device_id': 'battery-phone', 'name': 'Battery Phone', 'role': 'OTHER'})
+            assert camera.receive_json()['type'] == 'registered'
+            assert client.get('/api/devices').json()['devices'][0]['battery'] is None
+
+
+def test_old_socket_cannot_update_battery_or_heartbeat(tmp_path: Path) -> None:
+    import asyncio
+    from server.database import Database
+    from server.device_manager import ConnectedDevice, DeviceManager
+
+    async def check():
+        database = Database(tmp_path / 'battery.db')
+        database.initialise()
+        manager = DeviceManager(database)
+        active_socket, obsolete_socket = object(), object()
+        device = ConnectedDevice('test', 'Phone', 'OTHER', active_socket, 'test', 0,
+                                 last_seen_monotonic=1, battery={'level': 70, 'charging': False})
+        await manager.register_camera(device)
+        await manager.update_battery('test', obsolete_socket, {'level': 5, 'charging': True})
+        await manager.heartbeat('test', obsolete_socket)
+        assert device.battery == {'level': 70, 'charging': False}
+        assert device.last_seen_monotonic == 1
+
+    asyncio.run(check())
+
+
 def test_invalid_registration_is_rejected(tmp_path: Path) -> None:
     with make_client(tmp_path) as client:
         with client.websocket_connect("/ws/camera") as camera:

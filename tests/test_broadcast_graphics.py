@@ -359,6 +359,39 @@ def test_first_overs_setting_validated_and_persisted(tmp_path):
     assert state.graphics.config['powerplay_overs']==0
 
 
+def test_second_innings_runs_do_not_create_wickets_or_end_match(tmp_path):
+    state = State(tmp_path)
+    now = [100.0]
+    def send(*packets):
+        with patch('server.scoreboard_state.time.time', side_effect=lambda: now[0]):
+            for packet in packets:
+                state.receive(packet.encode())
+                now[0] += .06
+            now[0] += 1.3
+            return state.snapshot()
+    with patch('server.scoreboard_state.time.time', return_value=now[0]):
+        state.save(scoreboard(source='bluetooth'))
+    send('BTNPavilion', 'BTS9/182', 'BTR182', 'BTW9', 'OVB19.5')
+    with patch('server.scoreboard_state.time.time', return_value=now[0]):
+        state.broadcast_action({'action': 'end_innings'})
+        state.broadcast_action({'action': 'start_chase'})
+    send('BTNCreek', 'FTNPavilion', 'BTS0/0', 'BTR0', 'BTW0', 'OVB0')
+    for runs in (4, 5, 6, 10, 11):
+        data = send(f'BTS0/{runs}', f'BTR{runs}', 'OVB0.1')
+        assert data['score']['runs'] == str(runs)
+        assert data['score']['wickets'] == '0'
+        assert data['graphics']['phase'] == 'live'
+        chase = data['graphics']['innings'][1]
+        assert chase['wickets'] == 0 and chase['last_wicket'] is None
+        assert data['graphics']['active'] is None or data['graphics']['active']['kind'] != 'wicket_card'
+    data = send('BTS1/11', 'BTW1', 'OVB0.2')
+    assert data['score']['wickets'] == '1'
+    assert data['graphics']['innings'][1]['wickets'] == 1
+    data = send('BTS0/11', 'BTW0', 'OVB0.1')
+    assert data['score']['wickets'] == '0'
+    assert data['graphics']['innings'][0]['runs'] == 182
+
+
 def test_bluetooth_caught_and_bowled_delta_packets_populate_cards(tmp_path):
     state=State(tmp_path)
     now=[100.0]
@@ -370,7 +403,7 @@ def test_bluetooth_caught_and_bowled_delta_packets_populate_cards(tmp_path):
             return state.snapshot()
     send('BTNAlpha','FTNBeta','BTS0/0','OVB0','B1NAli','B1S0','B1B0','B2NBo','B2S0','B2B0')
     send('COV.','OVB0.1','B1B1')
-    send('COV. 6','OVB0.2','BTS6/0','B1S6','B1B2')
+    send('COV. 6','OVB0.2','BTS6/0','BTR6','B1S6','B1B2')
     data=send('COV. 6 W','OVB0.3','BTS6/1','BTW1','B1NBo','B1S0','B1B0','B2N ',
               'F1S6/1 (0.3)','LWN Ali','LWS6 (3)','LWDc','LWBDee','LWFCam')
     row=data['graphics']['innings'][0]['last_wicket']
@@ -396,17 +429,17 @@ def test_bluetooth_caught_and_bowled_delta_packets_populate_cards(tmp_path):
     data=send('BTS6/2','LWNEve','LWS0 (1)')
     assert data['graphics']['active']['until']==deadline
     send('B2NFay','B2S0','B2B0')
-    data=send('COV. 6 W W W','OVB0.5','BTS6/3','B2N ','LWNFay','LWDlbw')
+    data=send('COV. 6 W W W','OVB0.5','BTS6/3','BTW3','B2N ','LWNFay','LWDlbw')
     assert data['graphics']['innings'][0]['last_wicket']['dismissal']=='lbw b Dee'
     send('B2NGus','B2S0','B2B0')
     # Unchanged LWS is not resent; no bowler attribution on a run-out.
-    data=send('COV. 6 W W W W','OVB1.0','BTS6/4','B2N ','F1S6/3 (1.0)',
+    data=send('COV. 6 W W W W','OVB1.0','BTS6/4','BTW4','B2N ','F1S6/3 (1.0)',
               'LWNGus','LWDro','LWB ','LWFCam')
     assert data['score']['overs']=='1.0' and data['score']['bowler_overs']=='1.0'
     assert data['graphics']['innings'][0]['last_wicket']['dismissal']=='run out (Cam)'
     assert data['graphics']['innings'][0]['wicket_events'][-1]['balls']==6
     # Undo must not reapply the stale last-wicket delta to the restored batter.
-    data=send('BTS6/3','OVB0.5','B2NGus','B2S0','B2B0')
+    data=send('BTS6/3','BTW3','OVB0.5','B2NGus','B2S0','B2B0')
     assert data['graphics']['innings'][0]['last_wicket'] is None
     assert next(r for r in data['graphics']['innings'][0]['batters'] if r['name']=='Gus')['active'] is True
 

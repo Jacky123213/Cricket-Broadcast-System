@@ -6,8 +6,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from fastapi import WebSocket
+from pydantic import ValidationError
 
 from .database import Database
+from .models import BatteryStatus
 
 
 @dataclass
@@ -21,6 +23,7 @@ class ConnectedDevice:
     last_seen_monotonic: float = field(default_factory=time.monotonic)
     settings: dict[str, Any] = field(default_factory=dict)
     capabilities: dict[str, Any] = field(default_factory=dict)
+    battery: dict[str, Any] | None = None
 
     def public(self) -> dict[str, Any]:
         return {
@@ -35,6 +38,7 @@ class ConnectedDevice:
             ),
             "settings": self.settings,
             "capabilities": self.capabilities,
+            "battery": self.battery,
         }
 
 
@@ -44,6 +48,28 @@ class DeviceManager:
         self._devices: dict[str, ConnectedDevice] = {}
         self._umpires: dict[str, WebSocket] = {}
         self._lock = asyncio.Lock()
+
+    @staticmethod
+    def battery_status(payload: Any) -> dict[str, Any] | None:
+        """Unsupported/invalid telemetry is unavailable, never a guessed charge."""
+        if payload is None:
+            return None
+        try:
+            return BatteryStatus.model_validate(payload).model_dump()
+        except ValidationError:
+            return None
+
+    async def update_battery(self, device_id: str, websocket: WebSocket, payload: Any) -> None:
+        battery = self.battery_status(payload)
+        if payload is not None and battery is None:
+            return
+        async with self._lock:
+            device = self._devices.get(device_id)
+            if not device or device.websocket is not websocket or device.battery == battery:
+                return
+            device.battery = battery
+        # Ephemeral telemetry: do not persist it or restart video/recording.
+        await self.broadcast_snapshot()
 
     async def register_camera(self, device: ConnectedDevice) -> None:
         previous: ConnectedDevice | None
@@ -65,11 +91,13 @@ class DeviceManager:
         )
         await self.broadcast_snapshot()
 
-    async def heartbeat(self, device_id: str) -> None:
+    async def heartbeat(self, device_id: str, websocket: WebSocket) -> None:
         async with self._lock:
             device = self._devices.get(device_id)
-            if device:
+            if device and device.websocket is websocket:
                 device.last_seen_monotonic = time.monotonic()
+            else:
+                device = None
         if device:
             await asyncio.to_thread(self.database.touch_device, device_id)
 

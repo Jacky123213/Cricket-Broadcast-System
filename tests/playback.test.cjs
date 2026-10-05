@@ -46,3 +46,20 @@ test('decode failure is an error, not a genuine gap, and retry can recover',asyn
  p.update(0,true);await settle();assert.ok(p.error);assert.equal(p.ready,false);assert.ok(!messages.includes('No footage at this time'));
  broken=false;p.retry();p.update(0,true);await settle();assert.equal(p.error,null);assert.equal(p.ready,true);p.destroy();
 });
+
+test('continuous broadcast swaps a prepared decoder without an extra boundary seek',async()=>{
+ const p=new AnglePlayer(clips,()=>new Video(),()=>{},{continuous:true});p.update(3000,true);await settle();
+ const old=p.video,standby=p.slots.find(s=>s.video!==old),seeks=standby.video.seeks;
+ assert.equal(standby.preparedFor,'b');old._time=4.9;p.update(5100,true);await settle();
+ assert.equal(p.video,standby.video);assert.equal(standby.video.seeks,seeks);assert.equal(old.paused,true);assert.equal(p.video.hidden,false);
+ const count=p.video.seeks;p.lastCorrection=-10000;p.update(6300,true);await settle();
+ assert.equal(p.video.seeks,count,'ordinary broadcast drift is corrected with bounded speed, not another seek');assert.ok(p.video.playbackRate<=1.05);p.destroy();
+});
+
+test('continuous loading keeps the outgoing decoder visible and playing until replacement is ready',async()=>{
+ const p=new AnglePlayer([clips[0]],()=>new Video(),()=>{},{continuous:true});p.update(3000,true);await settle();const old=p.video;
+ p.clips=clips;const standby=p.slots.find(s=>s.video!==old);standby.video.readyState=1;
+ p.update(5100,true);await settle();assert.equal(old.paused,false);assert.equal(old.hidden,false);assert.equal(p.waiting,true);
+ standby.video.readyState=4;standby.video.dispatchEvent(new Event('loadeddata'));await settle();
+ assert.equal(p.video,standby.video);assert.equal(old.paused,true);assert.equal(old.hidden,true);p.destroy();
+});

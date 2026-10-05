@@ -11,6 +11,11 @@ class CameraRole(StrEnum):
     OTHER = "OTHER"
 
 
+class BatteryStatus(BaseModel):
+    level: int = Field(strict=True, ge=0, le=100)
+    charging: bool = Field(strict=True)
+
+
 class DeviceUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=48)
     role: CameraRole

@@ -372,6 +372,7 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
                 connected_at_ms=int(time.time() * 1000),
                 settings=registration.get("settings", {}),
                 capabilities=registration.get("capabilities", {}),
+                battery=manager.battery_status(registration.get("battery")),
             )
             await manager.register_camera(device)
             await websocket.send_json(
@@ -385,7 +386,9 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
             while True:
                 message = await websocket.receive_json()
                 if message.get("type") == "heartbeat":
-                    await manager.heartbeat(device_id)
+                    await manager.heartbeat(device_id, websocket)
+                    if "battery" in message:
+                        await manager.update_battery(device_id, websocket, message["battery"])
                     await websocket.send_json(
                         {
                             "type": "heartbeat_ack",

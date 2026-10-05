@@ -21,8 +21,8 @@ class Stream {
   addTrack(track) { this.tracks.push(track); }
   removeTrack(track) { this.tracks=this.tracks.filter(item=>item!==track); }
 }
-function harness() {
-  const elements=new Map(), requests=[], sockets=[], peers=[], recordings=[];
+function harness(batteryManager = null) {
+  const elements=new Map(), requests=[], sockets=[], peers=[], recordings=[],toasts=[];
   const element=key=>{if(!elements.has(key))elements.set(key,new Element());return elements.get(key);};
   element('#resolution').value='1280x720';element('#fps').value='30';element('#microphone').value='false';
   class Socket extends Element {
@@ -45,15 +45,31 @@ function harness() {
     async start(){} stop(){this.stopped=true;}
   }
   const context={document:{querySelector:element,getElementById:id=>element('#'+id),createElement:()=>new Element(),body:new Element()},
-    window:{DRS:{createClientId:()=> 'camera-id',showToast(){},websocketUrl:path=>'wss://local'+path},isSecureContext:true,
+    window:{DRS:{createClientId:()=> 'camera-id',showToast:text=>toasts.push(text),websocketUrl:path=>'wss://local'+path},isSecureContext:true,
       DRSOptics:{create:async raw=>({stream:raw,close(){},set(){}})},DRSRecorder:Recorder,addEventListener(){}},
     localStorage:{getItem(){return null;},setItem(){}},navigator:{userAgent:'Test',mediaDevices:{
       async getUserMedia(constraints){requests.push(constraints);return new Stream(constraints.video===false?[new Track('audio')]:[new Track('video'),...(constraints.audio?[new Track('audio')]:[])]);},
       async enumerateDevices(){return [];},addEventListener(){}}},
     WebSocket:Socket,RTCPeerConnection:Peer,setInterval(){},clearInterval(){},performance:{now:()=>0},fetch:async()=>({ok:true}),console};
-  vm.createContext(context);vm.runInContext(fs.readFileSync('frontend/assets/camera.js','utf8'),context);
-  return {elements,requests,sockets,peers,recordings,context,element,run:code=>vm.runInContext(code,context)};
+  if (batteryManager) context.navigator.getBattery=async()=>batteryManager;
+  vm.createContext(context);vm.runInContext(fs.readFileSync('frontend/assets/battery.js','utf8'),context);
+  vm.runInContext(fs.readFileSync('frontend/assets/camera.js','utf8'),context);
+  return {elements,requests,sockets,peers,recordings,toasts,context,element,run:code=>vm.runInContext(code,context)};
 }
+test('battery sends registration and heartbeat telemetry without restarting capture',async()=>{
+  const events=new Map();
+  const manager={level:.66,charging:false,addEventListener:(name,fn)=>events.set(name,fn),removeEventListener(){}};
+  const h=harness(manager);await new Promise(resolve=>setImmediate(resolve));
+  await h.run('connect()');await h.sockets[0].open();
+  assert.equal(h.sockets[0].sent[0].battery.level,66);
+  await h.sockets[0].emit('message',{data:JSON.stringify({type:'registered'})});
+  const count=h.recordings.length;
+  manager.level=.15;manager.charging=true;events.get('levelchange')();
+  assert.equal(h.sockets[0].sent.at(-1).type,'heartbeat');
+  assert.equal(h.sockets[0].sent.at(-1).battery.level,15);
+  assert.equal(h.sockets[0].sent.at(-1).battery.charging,true);
+  assert.equal(h.recordings.length,count);
+});
 test('mic changed after preview or connection reaches every peer without stopping video',async()=>{
   const h=harness();await h.run('ensureMedia()');const video=h.run('previewStream.getVideoTracks()[0]');
   h.element('#microphone').value='true';await h.run('ensureMedia()');
@@ -87,4 +103,31 @@ test('replaced camera peers ignore old ICE, answers and close events',async()=>{
   await h.run("handleSignal({console_id:'obs',signal:{session_id:'new',candidate:{candidate:'valid'}}})");
   assert.equal(h.peers[1].candidates[0].candidate,'valid');
   assert.equal(h.sockets[0].sent.at(-1).signal.session_id,'new');
+});
+
+test('an obsolete offer rejected after replacement is not reported as a camera failure',async()=>{
+ const h=harness();await h.run('connect()');await h.sockets[0].open();let reject;
+ const first=h.run("handleSignal({console_id:'obs',signal:{session_id:'old',description:{type:'offer'}}})");
+ h.peers[0].setRemoteDescription=()=>new Promise((resolve,no)=>{reject=no;});await new Promise(r=>setImmediate(r));
+ await h.run("handleSignal({console_id:'obs',signal:{session_id:'new',description:{type:'offer'}}})");
+ reject(Object.assign(Error('peer closed'),{name:'InvalidStateError'}));await first;
+ assert.equal(h.toasts.length,0);assert.equal(h.run('viewerErrors.size'),0);assert.equal(h.sockets[0].sent.at(-1).signal.session_id,'new');
+});
+
+test('one failed viewer cannot overwrite a working link and recovery clears its error',async()=>{
+ const h=harness();await h.run('connect()');await h.sockets[0].open();
+ await h.run("handleSignal({console_id:'umpire',signal:{session_id:'u',description:{type:'offer'}}})");
+ h.peers[0].connectionState='connected';await h.peers[0].emit('connectionstatechange');
+ const failed=h.run("handleSignal({console_id:'obs',signal:{session_id:'bad',description:{type:'offer'}}})");
+ h.peers[1].setRemoteDescription=async()=>{throw Error('test negotiation error');};await failed;
+ assert.equal(h.element('#streamStatusValue').textContent,'LIVE · 1');assert.match(h.element('#videoLinkNote').textContent,/test negotiation error/);assert.equal(h.peers[0].connectionState,'connected');assert.equal(h.toasts.length,0);
+ await h.run("handleSignal({console_id:'obs',signal:{session_id:'retry',description:{type:'offer'}}})");h.peers[2].connectionState='connected';await h.peers[2].emit('connectionstatechange');
+ assert.equal(h.element('#streamStatusValue').textContent,'LIVE · 2');assert.equal(h.run('viewerErrors.size'),0);assert.doesNotMatch(h.element('#videoLinkNote').textContent,/error|retrying/);
+});
+
+test('late messages and close from an old socket cannot stop a reconnected camera',async()=>{
+ const h=harness();await h.run('connect()');await h.sockets[0].open();await h.sockets[0].emit('message',{data:JSON.stringify({type:'registered'})});
+ h.sockets[0].readyState=3;await h.run('connect()');await h.sockets[1].open();await h.sockets[1].emit('message',{data:JSON.stringify({type:'registered'})});
+ const current=h.recordings.at(-1);await h.sockets[0].emit('close',{reason:'old connection'});await h.sockets[0].emit('message',{data:JSON.stringify({type:'registered'})});
+ assert.equal(current.stopped,undefined);assert.equal(h.recordings.at(-1),current);assert.equal(h.toasts.length,0);
 });

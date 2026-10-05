@@ -5,7 +5,7 @@ import threading
 import time
 from collections import deque
 from pathlib import Path
-from .scoreboard_protocol import decode_packet
+from .scoreboard_protocol import ScoreDecoder
 from .broadcast_graphics import BroadcastGraphics
 
 DEFAULT = dict(team1='HOME', team2='AWAY', color1='#ec218c', color2='#ff922e',
@@ -60,6 +60,7 @@ class State:
         self.folder = Path(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
+        self.decoder = ScoreDecoder()
         self.data = copy.deepcopy(DEFAULT)
         self.status = 'Bluetooth not started'
         self.last_packet = None
@@ -227,6 +228,8 @@ class State:
         validate(changes)
         with self.lock:
             updated = self._team_appearance({**self.data, **changes}, changes)
+            if updated['team1'] != self.data['team1'] or updated['source'] != self.data['source']:
+                self.decoder = ScoreDecoder()
             # Do not carry a previous innings' delta wicket fields into a chase.
             if updated['team1'] != self.data['team1']:
                 for key in WICKET_FIELDS:
@@ -240,6 +243,7 @@ class State:
                    'batter1_name','batter2_name','batter1_balls','batter2_balls','striker','bowler',
                    'bowler_figures','bowler_overs','deliveries','banner',*WICKET_FIELDS)})
         with self.lock:
+            self.decoder = ScoreDecoder()
             self.last_score = None
             config = copy.deepcopy(self.graphics.config)
             config.update(target=None, result_override='')
@@ -252,16 +256,17 @@ class State:
         print(text, flush=True)
 
     def receive(self, raw):
-        patch = decode_packet(raw)
         now = time.time()
-        item = dict(at=now, text=raw.decode('utf-8', errors='replace'), hex=raw.hex(), fields=patch)
         with self.lock:
+            patch = self.decoder.decode(raw, now)
+            item = dict(at=now, text=raw.decode('utf-8', errors='replace'), hex=raw.hex(), fields=patch)
             self.count += 1; self.last_packet = now; self.logs.append(item)
             if patch and self.data['source'] == 'bluetooth':
                 changes = dict(patch)
                 off = changes.pop('_strike_off', None)
                 if off == self.data['striker']: changes['striker'] = 'none'
                 if 'team1' in changes and changes['team1'] != self.data['team1']:
+                    self.decoder = ScoreDecoder()
                     changes.update({key:'' for key in WICKET_FIELDS})
                 self.data = self._team_appearance({**self.data, **changes}, changes)
                 if any(k in changes for k in ('team1', 'team2')):

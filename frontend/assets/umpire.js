@@ -112,7 +112,7 @@ function cameraTile(device) {
     <div class="camera-placeholder"><div class="camera-icon" aria-hidden="true"></div><div>CONNECTING VIDEO</div></div>
     <div class="stream-state" data-stream-state="${escapeHtml(device.device_id)}">WAITING</div>
     <div class="camera-meta">
-      <div><h3 class="camera-name"></h3><div class="camera-role"></div></div>
+      <div><div class="device-name-line"><h3 class="camera-name"></h3><span class="battery-badge"></span></div><div class="camera-role"></div></div>
       <div class="live-tag">LIVE</div>
     </div>`;
   window.DRSLiveInspect?.(article);
@@ -148,6 +148,12 @@ function render() {
       grid.append(tile);
     }
     tile.querySelector(".camera-name").textContent = device.name;
+    const battery = window.DRSBattery.describe(device.battery);
+    const badge = tile.querySelector('.battery-badge');
+    badge.textContent = battery.label;
+    badge.className = `battery-badge ${battery.state}`;
+    badge.title = battery.title;
+    badge.setAttribute('aria-label', battery.title);
     tile.querySelector(".camera-role").textContent = `${formatRole(device.role)} · ${device.settings?.resolution || "AUTO"} · ${device.settings?.fps || "—"} FPS`;
     const peer = peers.get(device.device_id);
     if (peer && (peer.mediaRevision !== (device.settings?.media_revision || 0) ||
@@ -158,15 +164,18 @@ function render() {
     });
   }
 
-  deviceList.innerHTML = devices.map(device => `
+  deviceList.innerHTML = devices.map(device => {
+    const battery = window.DRSBattery.describe(device.battery);
+    return `
     <div class="device-row">
       <span class="connection-light"></span>
-      <div><strong>${escapeHtml(device.name)}</strong><small>${escapeHtml(device.remote_address)} · ${escapeHtml(formatRole(device.role))}</small></div>
+      <div><div class="device-name-line"><strong>${escapeHtml(device.name)}</strong><span class="battery-badge ${battery.state}" title="${escapeHtml(battery.title)}" aria-label="${escapeHtml(battery.title)}">${escapeHtml(battery.label)}</span></div><small>${escapeHtml(device.remote_address)} · ${escapeHtml(formatRole(device.role))}</small></div>
       <div class="device-actions">
         <button class="icon-btn edit-device" data-id="${escapeHtml(device.device_id)}" title="Edit camera" aria-label="Edit ${escapeHtml(device.name)}">✎</button>
         <button class="icon-btn disconnect-device" data-id="${escapeHtml(device.device_id)}" title="Disconnect camera" aria-label="Disconnect ${escapeHtml(device.name)}">×</button>
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 }
 
 function connectUmpire() {
