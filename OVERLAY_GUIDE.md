@@ -56,7 +56,7 @@ Use **New match / clear scores** between matches. It clears both innings and cap
 - First-innings projections are one strip message with all four estimates, for example `PROJECTED: 6.39 RPO 128 | 7 RPO 134 | 8 RPO 143 | 9 RPO 153`. There is no separate projection cycle. The three whole-number rates are above the actual current rate; this message is weighted more heavily after the first third of the innings. Cricket overs use six-ball arithmetic: 10.2 is 62 legal balls.
 - At full time the strip displays the calculated result, including runs, wickets or a tie. A result override supports no-result or other manually confirmed outcomes.
 
-## Six graphics
+## Seven graphics
 
 | Graphic | Manual control | Automatic trigger |
 | --- | --- | --- |
@@ -66,8 +66,15 @@ Use **New match / clear scores** between matches. It clears both innings and cap
 | Match summary | 04 · Match summary | 30 seconds after the match ends |
 | Dismissed batter panel | 05 · Last wicket / Save & show wicket graphic | Bluetooth last-wicket details or confirmed outgoing batter near a wicket |
 | Power Surge badge | 06 · Power Surge on/off | Manual only |
+| Bowling card | 07 · Bowling card | Manual only; always the current bowling side |
 
 Graphics use the corresponding team's custom colour and uploaded logo. The summary contains each innings total, overs, up to four leading batters and bowling figures, plus the result. Asterisks mark known not-out batters. Missing fields are shown as dashes or labelled unavailable.
+
+The bowling card shares the batting card's layout and shows the **opposite team to the current batting side**, including that team's logo and colour. It lists known bowlers, overs, **wickets–runs**, and economy calculated using legal balls (for example 1.2 overs is eight balls). Unknown figures/economy show dashes. The active bowler is highlighted. This card follows the current innings even if the innings selector is on an older innings or the card remains held across the team swap; use the selector for historical batting/other graphics. Summary bowling figures use the same wickets–runs convention.
+
+Bowling Bluetooth figures follow the scorer's confirmed runs-first or wickets-first display setting. Refresh the scoreboard after upgrading to resend current figures. Previously misinterpreted historical bowling rows remain editable; the app does not guess which old saved small figures should be reversed.
+
+Live tests confirmed **st** for stumping and **of** for obstruction. Stumping displays **st wk b [bowler]** (or **st wk** without a bowler), regardless of the supplied fielder. An obstruction accompanied by six runs on that wicket delivery displays **6 and Out**. An ordinary obstruction without that six-run delivery stays **Obstructing the field**; a batter's total of six alone is not enough. The scorer supplies the score and bowler credit; these labels do not add runs or award a bowler wicket. Both labels are also available through optional dismissal corrections.
 
 Colours and logos belong to each team name, not the batting/bowling position. Set each team's appearance once and save. Team-name matching ignores letter case and extra whitespace, and appearance follows manual team swaps, split Bluetooth team-name packets, the chase and restarts. Team profiles stay in private local `data/teams.json` and are retained when starting a new match. A genuinely new team initially inherits the current slot's appearance until you customise it.
 

@@ -45,7 +45,7 @@ class EnhancedTests(unittest.TestCase):
             (b'B1B12', {'batter1_balls':'12'}),
             (b'B2B1', {'batter2_balls':'1'}),
             (b'F1NPlayer 1', {'bowler':'Player 1'}),
-            (b'F1S7/0 (0.2)', {'bowler_figures':'0–7','bowler_overs':'0.2'}),
+            (b'F1S0/39 (3.1)', {'bowler_figures':'0–39','bowler_overs':'3.1'}),
             (b'F1S28/3 (4.5)', {'bowler_figures':'3–28','bowler_overs':'4.5'}),
             (b'F1N ', {'bowler':''}),
             (b'COV ', {'deliveries':''}),
@@ -63,8 +63,17 @@ class EnhancedTests(unittest.TestCase):
             state.receive(b'B2K0');self.assertEqual(state.snapshot()['score']['striker'],'none')
             state.receive(b'COV ');self.assertEqual(state.snapshot()['score']['deliveries'],'')
     def test_malformed_bowling_figures_and_unobserved_codes(self):
-        for packet in (b'F1S7/0 (0.9)',b'F1S7/99 (0.2)',b'B1K8',b'F2NP 2',b'B1D1'):
+        for packet in (b'F1S7/0 (0.9)',b'F1S11/99 (0.2)',b'B1K8',b'F2NP 2',b'B1D1'):
             self.assertEqual(decode_packet(packet),{})
+
+    def test_ambiguous_bowling_figures_require_confirmed_score_order(self):
+        self.assertEqual(decode_packet(b'F1S1/6 (0.4)'), {})
+        self.assertEqual(decode_packet(b'F1S1/6 (0.4)', score_order='wickets_first'),
+                         {'bowler_figures':'1–6','bowler_overs':'0.4'})
+        self.assertEqual(decode_packet(b'F1S6/2 (0.3)', score_order='runs_first'),
+                         {'bowler_figures':'2–6','bowler_overs':'0.3'})
+        self.assertEqual(decode_packet(b'F1S0/123 (4.0)'),
+                         {'bowler_figures':'0–123','bowler_overs':'4.0'})
 
 class StateTests(unittest.TestCase):
     def setUp(self):
@@ -104,6 +113,17 @@ class StateTests(unittest.TestCase):
         self.assertEqual((self.state.data['runs'],self.state.data['wickets']),('6','0'))
         self.state.receive(b'BTS7/7')
         self.assertEqual((self.state.data['runs'],self.state.data['wickets']),('6','0'),'BTS cannot overwrite dedicated score fields')
+
+    def test_bowling_figures_follow_both_live_score_display_conventions(self):
+        for packet in (b'BTS0/31', b'BTR31', b'BTW0', b'F1S0/35 (3.0)'):
+            self.state.receive(packet)
+        self.assertEqual(self.state.data['bowler_figures'], '0–35')
+        self.state.receive(b'BTS1/31'); self.state.receive(b'BTW1'); self.state.receive(b'F1S1/6 (0.4)')
+        self.assertEqual(self.state.data['bowler_figures'], '1–6')
+        # The scorer can change to runs-first with the same small totals.
+        self.state.receive(b'BTS6/2'); self.state.receive(b'BTR6'); self.state.receive(b'BTW2')
+        self.state.receive(b'F1S6/2 (0.3)')
+        self.assertEqual(self.state.data['bowler_figures'], '2–6')
     def test_restore_clears_live_numbers(self):
         self.state.save({'runs':'70','team1':'TEST','last_wicket_name':'Player A','last_wicket_code':'b'})
         restored=State(self.temp.name).snapshot()['score']

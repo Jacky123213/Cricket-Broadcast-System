@@ -49,7 +49,7 @@ class ScoreDecoder:
             if int(pair[0]) > 10: self.order = 'runs_first'
             elif int(pair[1]) > 10: self.order = 'wickets_first'
             return self.fallback(score_fields(pair, self.order))
-        fields = decode_packet(payload)
+        fields = decode_packet(payload, score_order=self.order)
         key = 'runs' if payload[:3] == b'BTR' else 'wickets' if payload[:3] == b'BTW' else None
         if key in fields: self.dedicated.add(key)
         if self.combined and now - self.combined_at <= 1.2:
@@ -63,7 +63,7 @@ class ScoreDecoder:
         return fields
 
 
-def decode_packet(payload: bytes) -> dict:
+def decode_packet(payload: bytes, score_order=None) -> dict:
     try:
         text = payload.decode('utf-8').strip('\x00\r\n ')
     except UnicodeDecodeError:
@@ -88,11 +88,14 @@ def decode_packet(payload: bytes) -> dict:
     elif code == 'F1S':
         if not value:
             return {'bowler_figures':'', 'bowler_overs':''}
-        match = re.fullmatch(r'(\d{1,4})/(\d{1,2})\s*\((\d{1,3}(?:\.[0-5])?)\)', value)
-        if match and int(match[2]) <= 10:
-            # Captured F1S7/0 (0.2): runs conceded / wickets, then overs.
-            return {'bowler_figures': f'{match[2]}–{match[1]}',
-                    'bowler_overs': match[3] if '.' in match[3] else match[3]+'.0'}
+        match = re.fullmatch(r'(\d{1,4})/(\d{1,4})\s*\((\d{1,3}(?:\.[0-5])?)\)', value)
+        if match:
+            # PCS uses the same selected display convention for BTS and F1S.
+            # Both orders were captured live; do not guess an ambiguous pair.
+            figures = score_fields((match[1], match[2]), score_order)
+            if figures:
+                return {'bowler_figures': f'{figures["wickets"]}–{figures["runs"]}',
+                        'bowler_overs': match[3] if '.' in match[3] else match[3]+'.0'}
     elif code == 'COV' and len(value) <= 160:
         # Complete current-over snapshot, NOT an incremental delivery event.
         # Preserve unfamiliar extras notation verbatim; blank clears the row.

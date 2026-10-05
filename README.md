@@ -1,6 +1,6 @@
 # Cricket Broadcast System
 
-Current release: **1.1.2** · Scoreboard graphics **0.4.2** · DRS engine **0.15.2**.
+Current release: **1.2.0** · Scoreboard graphics **0.5.0** · DRS engine **0.15.2**.
 
 Backyard Cricket Studio combines **Backyard DRS Replay Studio 0.15.2** and **Backyard Scoreboard 0.2** into one local Windows application.
 
@@ -21,7 +21,8 @@ The PC runs a native desktop window with Replay Studio, Scoreboard, Settings and
 - Team-owned colours and logos that follow batting/bowling changes, including Bluetooth team-name updates.
 - Shared rotating information strip: main text, attendance, head-to-head, last wicket, partnership, occasional boundaries, combined projections, chase equation/rates and result.
 - Runs-per-over chart with configurable first-X-overs Power Play highlighting, drinks batting card, innings-break graphic, match summary, wicket panel and manual Power Surge in team colours. Manual graphics stay on air until reopened/hidden.
-- Automatic last-wicket name, runs/balls, dismissal, bowler and fielder from observed Generic Bluetooth fields. Caught, bowled, LBW and run-out were verified with live scorer tests; unknown types show Out.
+- Automatic last-wicket name, runs/balls, dismissal, bowler and fielder from observed Generic Bluetooth fields. Caught, bowled, LBW, run-out and stumping were verified with live scorer tests; unknown types show Out. Stumpings show **st wk**, and an obstruction with six runs on the delivery shows the backyard dismissal **6 and Out**.
+- Full-screen bowling card in the batting-card style, using the current bowling team's colour/logo, overs, wickets–runs figures and calculated economy.
 - Recorded innings history and a statistics editor for details missing from the Bluetooth feed.
 
 ## Windows install
@@ -64,11 +65,11 @@ Runtime data, certificates, logs, local environments and replay buffers are excl
 
 No licence is provided at present. Public availability does not grant an open-source licence; a licence can be added later.
 
-See [RELEASE_1_1_2.md](RELEASE_1_1_2.md) for this release's changes and upgrade instructions.
+See [RELEASE_1_2_0.md](RELEASE_1_2_0.md) for this release's changes and upgrade instructions.
 
 ## Broadcast graphics
 
-See [OVERLAY_GUIDE.md](OVERLAY_GUIDE.md) for information strip controls, six graphics, automatic triggers, wicket details and statistics corrections. Existing installs can restart Studio and refresh camera/OBS pages; no additional runtime packages are needed for this upgrade.
+See [OVERLAY_GUIDE.md](OVERLAY_GUIDE.md) for information strip controls, seven graphics, automatic triggers, wicket details and statistics corrections. Existing installs can restart Studio and refresh camera/OBS pages; no additional runtime packages are needed for this upgrade.
 
 ## Current limits
 

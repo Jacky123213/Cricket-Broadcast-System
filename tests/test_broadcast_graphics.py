@@ -245,6 +245,9 @@ def test_broadcast_http_actions(tmp_path):
         assert data['score']['team1']=='Creek'
         assert data['score']['color1']==DEFAULT['color2']
         assert data['graphics']['innings'][0]['runs']==12
+        assert client.post('/api/scoreboard/broadcast/action',json={'action':'show','kind':'bowling_card'}).status_code==200
+        active=client.get('/api/scoreboard/state').json()['graphics']['active']
+        assert active['kind']=='bowling_card' and active['innings']==1 and active['until'] is None
         assert client.post('/api/scoreboard/broadcast/action',json={'action':'show','kind':'run_chart','innings':'bad'}).status_code==400
 
 
@@ -390,6 +393,68 @@ def test_second_innings_runs_do_not_create_wickets_or_end_match(tmp_path):
     data = send('BTS0/11', 'BTW0', 'OVB0.1')
     assert data['score']['wickets'] == '0'
     assert data['graphics']['innings'][0]['runs'] == 182
+
+
+def test_live_stumping_with_and_without_fielder_and_six_and_out(tmp_path):
+    state = State(tmp_path)
+    now = [100.0]
+    def send(*packets):
+        with patch('server.scoreboard_state.time.time', side_effect=lambda: now[0]):
+            for packet in packets:
+                state.receive(packet.encode()); now[0] += .06
+            now[0] += 1.3
+            return state.snapshot()
+    send('BTNAlpha', 'FTNBeta', 'BTS0/0', 'BTR0', 'BTW0', 'OVB0', 'F1NDee')
+    data = send('COVW', 'OVB0.1', 'BTS0/1', 'BTW1', 'F1S0/1 (0.1)',
+                'LWNAli', 'LWS0 (1)', 'LWDst', 'LWBDee', 'LWF ')
+    assert data['graphics']['innings'][0]['last_wicket']['dismissal'] == 'st wk b Dee'
+    # Delta packet omits the unchanged type, bowler and runs/balls.
+    data = send('COVW W', 'OVB0.2', 'BTS0/2', 'BTW2', 'F1S0/2 (0.2)',
+                'LWNBo', 'LWFCam')
+    assert data['graphics']['innings'][0]['last_wicket']['dismissal'] == 'st wk b Dee'
+    data = send('COVW W W', 'OVB0.3', 'BTS6/3', 'BTR6', 'BTW3', 'F1S6/2 (0.3)',
+                'LWNEve', 'LWS6 (1)', 'LWDof', 'LWB ', 'LWF ')
+    current = data['graphics']['innings'][0]
+    assert current['last_wicket']['dismissal'] == '6 and Out'
+    assert (data['score']['runs'], data['score']['wickets']) == ('6', '3')
+    assert (current['bowlers'][0]['figures'], current['bowlers'][0]['wickets'], current['bowlers'][0]['runs']) == ('2–6', 2, 6)
+    assert current['bowlers'][0]['economy'] == 12
+    assert send('BTS6/3')['graphics']['innings'][0]['last_wicket']['dismissal'] == '6 and Out'
+    # A batter on six dismissed for obstruction without scoring six on this
+    # delivery must not become "6 and Out" just from their career/innings total.
+    data = send('COVW W W W', 'OVB0.4', 'BTS6/4', 'BTW4', 'LWNCam', 'LWS6 (2)')
+    assert data['graphics']['innings'][0]['last_wicket']['dismissal'] == 'Obstructing the field'
+
+
+def test_bowling_card_holds_and_follows_current_opposition():
+    engine = BroadcastGraphics()
+    s = scoreboard(runs='20', overs='2.0', bowler='Dee', bowler_figures='2–7', bowler_overs='1.2')
+    data = observe(engine, s)
+    assert data['innings'][0]['bowlers'][0]['economy'] == 5.25
+    engine.show('bowling_card', 101)
+    assert engine.snapshot(s, 10000)['active']['until'] is None
+    engine.end_innings(10001)
+    chase = scoreboard(team1='Creek', team2='Pavilion', runs='0', color1=s['color2'], color2=s['color1'])
+    engine.action({'action': 'start_chase'}, chase, 10002)
+    data = observe(engine, chase, 10003)
+    assert data['active']['kind'] == 'bowling_card' and data['active']['innings'] == 1
+    assert data['innings'][data['active']['innings']]['opposition'] == 'Pavilion'
+    engine.action({'action':'hide'}, chase, 10004)
+    assert engine.snapshot(chase, 10005)['active'] is None
+
+
+def test_bowling_economy_uses_legal_balls_and_preserves_unknown_values():
+    engine = BroadcastGraphics()
+    s = scoreboard()
+    observe(engine, s)
+    engine.edit_stats({'innings':0,'bowlers':[
+        {'name':'Dee','figures':'2–28','overs':'4.5'},
+        {'name':'Bo','figures':'0–0','overs':'0.0'},
+        {'name':'Cam','figures':'','overs':'1.2'}]})
+    rows = engine.snapshot(s, 101)['innings'][0]['bowlers']
+    assert rows[0]['economy'] == 5.79
+    assert rows[1]['economy'] is None and rows[1]['runs'] == 0
+    assert rows[2]['economy'] is None and rows[2]['runs'] is None and rows[2]['wickets'] is None
 
 
 def test_bluetooth_caught_and_bowled_delta_packets_populate_cards(tmp_path):

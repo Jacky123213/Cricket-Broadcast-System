@@ -18,7 +18,7 @@ DEFAULT_CONFIG = {
     "match_title": "BACKYARD CRICKET", "venue": "", "messages": [],
     "result_override": "", "powerplay_overs": 0,
 }
-KINDS = {"run_chart", "batting_card", "innings_break", "match_summary", "wicket_card", "power_surge"}
+KINDS = {"run_chart", "batting_card", "bowling_card", "innings_break", "match_summary", "wicket_card", "power_surge"}
 
 
 def integer(value):
@@ -182,6 +182,7 @@ class BroadcastGraphics:
         previous = self.previous
         old_w = current["wickets"]
         old_b = current["balls"]
+        old_runs = current['runs']
         old_tokens = current["over_tokens"]
         if old_b is None: current['tracked_from_start'] = b == 0 and runs == 0
         if old_b is not None and b < old_b:
@@ -204,7 +205,9 @@ class BroadcastGraphics:
         if old_w is not None and wickets > old_w:
             current['partnership_runs'] = current['partnership_balls'] = None
             for number in range(old_w + 1, wickets + 1):
-                current["wicket_events"].append({"balls": b, "runs": runs, "number": number, "at": now})
+                delivery_runs = runs - old_runs if old_runs is not None and old_b is not None and 0 <= b-old_b <= 1 and wickets == old_w+1 else None
+                current["wicket_events"].append({"balls": b, "runs": runs, "number": number, "at": now,
+                                               "delivery_runs": delivery_runs})
         self._players(current, score, previous, now)
         # Boundaries remain in normal rotation, never interrupt every scoring shot.
         halfway = self.config["total_overs"] * 3
@@ -288,11 +291,19 @@ class BroadcastGraphics:
         code = score.get('last_wicket_code', '').lower()
         bowler = score.get('last_wicket_bowler', '')
         fielder = score.get('last_wicket_fielder', '')
+        event = next((e for e in reversed(current['wicket_events']) if e['number'] == number), None)
+        delivery_runs = event.get('delivery_runs') if event else None
+        if delivery_runs is None and event:
+            before = current['samples'].get(str(event['balls']-1))
+            if before is not None: delivery_runs = event['runs'] - before
         # c/b/ro abbreviations are confirmed by live tests. Literal full types
         # are readable as-is; unknown abbreviations fall back to Out, not guesses.
         if code == 'b': dismissal = 'b '+bowler if bowler else 'Bowled'
         elif code == 'c': dismissal = ('c '+fielder if fielder else 'Caught') + (' b '+bowler if bowler else '')
         elif code == 'ro': dismissal = 'run out'+(' ('+fielder+')' if fielder else '')
+        elif code in ('st', 'stumped'): dismissal = 'st wk'+(' b '+bowler if bowler else '')
+        elif code in ('of', 'obstructing the field'):
+            dismissal = '6 and Out' if delivery_runs == 6 else 'Obstructing the field'
         else:
             types = {'lbw':'lbw', 'run out':'run out', 'stumped':'stumped',
                      'hit wicket':'hit wicket', 'retired out':'retired out',
@@ -304,7 +315,6 @@ class BroadcastGraphics:
         is_new = not previous_last or previous_last['name'] != name or previous_last.get('out_number') != number
         # Correct an earlier slot-change inference if the authoritative name
         # identifies a different batter (slot reshuffles and run-outs can do this).
-        event = next((e for e in reversed(current['wicket_events']) if e['number'] == number), None)
         if event and event.get('identified_name') not in (None,name):
             wrong = next((r for r in current['batters'] if r['name'] == event['identified_name']), None)
             if wrong and wrong.get('out_number') == number: wrong.update(out_number=0,dismissal='',active=wrong['name'] in (score['batter1_name'],score['batter2_name']))
@@ -496,6 +506,13 @@ class BroadcastGraphics:
         b = current["balls"]
         out["overs"] = overs(b)
         out["run_rate"] = round(current["runs"] * 6 / b, 2) if b and current["runs"] is not None else None
+        for row in out['bowlers']:
+            figures = re.fullmatch(r'(\d{1,2})\s*[–\-/]\s*(\d{1,4})', row.get('figures', ''))
+            known = figures is not None and int(figures[1]) <= 10
+            row['wickets'] = int(figures[1]) if known else None
+            row['runs'] = int(figures[2]) if known else None
+            bowled = balls(row.get('overs', ''))
+            row['economy'] = round(row['runs'] * 6 / bowled, 2) if known and bowled else None
         tokens = [t for row in current["over_tokens"].values() for t in row]
         out["fours"] = current.get("fours") if current.get("fours") is not None else tokens.count("4")
         out["sixes"] = current.get("sixes") if current.get("sixes") is not None else tokens.count("6")
@@ -605,8 +622,10 @@ class BroadcastGraphics:
             self.strip = {"kind": chosen["kind"], "text": chosen["text"]}
             if chosen['kind'] == 'boundaries': self.last_boundary_strip = now
             self.next_strip_at = now + self.config["interval_seconds"]
+        active = copy.deepcopy(self.active)
+        if active and active['kind'] == 'bowling_card': active['innings'] = len(self.innings)-1
         return {"config": copy.deepcopy(self.config), "phase": self.phase,
                 "innings": [self.stats(i) for i in self.innings], "target": self.target() if len(self.innings) > 1 else None,
-                "result": result, "active": copy.deepcopy(self.active), "strip": self.strip.copy(),
+                "result": result, "active": active, "strip": self.strip.copy(),
                 "power_surge": self.power_surge,
                 "summary_due_in": max(0, math.ceil(self.finished_at + 30 - now)) if self.finished_at and not self.summary_shown and self.config['auto_summary'] else None}
