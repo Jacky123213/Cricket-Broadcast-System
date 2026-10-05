@@ -11,7 +11,8 @@ const sockets=[];
 w.WebSocket=class{static OPEN=1;constructor(){this.listeners={};sockets.push(this);}addEventListener(type,fn){this.listeners[type]=fn;}send(){}};w.RTCPeerConnection=class{};
 const clips=['landscape','portrait','third','fourth'].flatMap(id=>[0,4000].map((t,i)=>({id:id+i,device_id:id,start_ms:t,end_ms:t+5000,url:'/clips/'+id+i,uncertainty_ms:3})));
 w.fetch=async(url,opts)=>({ok:true,json:async()=>url.startsWith('/api/replays')?{id:'review',start_ms:0,end_ms:8000,live_delay_ms:3000,clips,audio:{landscape:[{t:1000,peak:.5,impact:true}],portrait:[{t:1500,peak:.3,impact:false}]}}:url==='/api/devices'?{devices:['landscape','portrait','third','fourth'].map(id=>({device_id:id,name:id}))}:url==='/api/buffer'?{server_ms:10000,cameras:{},recorders:{},audio:{}}:url==='/api/server-info'?{camera_urls:['https://192.168.1.2:8765/camera']}:{sent_ms:10000}});
-for(const name of ['common','battery','view-controls','live-inspect','umpire','replay-engine','replay','ball-detector','review-desk','assistance'])w.eval(fs.readFileSync(root+'frontend/assets/'+name+'.js','utf8'));
+for(const name of ['sections','common','battery','view-controls','live-inspect','umpire','replay-engine','replay','ball-detector','review-desk','assistance'])w.eval(fs.readFileSync(root+'frontend/assets/'+name+'.js','utf8'));
+w.CricketSections.init();
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 (async()=>{
  const showDevices=devices=>sockets[0].listeners.message({data:JSON.stringify({type:'devices',devices})});
@@ -32,6 +33,10 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
  assert.equal(d.querySelectorAll('.angle-thumb').length,4);assert.equal(d.querySelectorAll('#programSlot .replay-angle').length,0);assert.equal(d.querySelectorAll('#previewSlot .replay-angle').length,0);
  const assign=(slot,id)=>{d.getElementById(slot+'Empty').click();assert.equal(d.getElementById('cameraPicker').hidden,false);d.getElementById('pickerCamera').value=id;d.getElementById('pickerApply').click();};assign('preview','landscape');assign('program','portrait');
  d.getElementById('replayPlay').click();await wait(250);assert.equal(d.getElementById('replayState').textContent,'PLAYING');
+ const viewerToggle=d.querySelector('#replayViews .section-toggle'),programTile=d.querySelector('#programSlot .replay-angle');
+ viewerToggle.click();assert.equal(viewerToggle.getAttribute('aria-expanded'),'false');assert.equal(programTile.isConnected,true);assert.equal(programTile.parentElement.id,'programSlot');
+ assert.ok(!d.getElementById('replayTransport').closest('.section-content'),'transport remains outside folded sections');
+ assert.equal(d.getElementById('replayState').textContent,'PLAYING');viewerToggle.click();
 
  const held=d.querySelector('#programSlot video:not([hidden])');held._ready=2;
  await wait(200);assert.equal(d.getElementById('replayState').textContent,'BUFFERING');

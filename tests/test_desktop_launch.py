@@ -35,7 +35,8 @@ def test_desktop_embeds_upgraded_broadcast_desk_without_cached_html(tmp_path):
         desktop = client.get("/")
         assert f'/scoreboard?build={UI_BUILD_ID}' in desktop.text
         assert 'data-score-section="statsEditor"' in desktop.text
-        assert 'data-score-section="graphicControls"' in desktop.text
+        assert 'data-score-section="graphicsOnAir"' in desktop.text
+        assert 'data-score-section="broadcastBranding"' in desktop.text
         assert "__STUDIO_BUILD__" not in desktop.text
         assert f'Studio {APP_VERSION} · Overlay {SCOREBOARD_VERSION}' in desktop.text
         page = client.get(f"/scoreboard?build={UI_BUILD_ID}")

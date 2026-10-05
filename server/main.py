@@ -221,6 +221,20 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"ok": True}
 
+    @app.get('/api/broadcast/branding')
+    async def broadcast_branding() -> dict[str, Any]:
+        return await asyncio.to_thread(scoreboard.branding_snapshot)
+
+    @app.post('/api/broadcast/branding')
+    async def save_broadcast_branding(changes: dict[str, Any]) -> dict[str, bool]:
+        try:
+            await asyncio.to_thread(scoreboard.save_branding, changes)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(503, 'Could not save broadcast logo. Check the Studio data folder.') from exc
+        return {'ok': True}
+
     @app.get('/api/scoreboard/program-state')
     async def program_state(at: float):
         now = time.time()

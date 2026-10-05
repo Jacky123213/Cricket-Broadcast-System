@@ -1,0 +1,53 @@
+/* Isolated DOM regression checks: no live match, Bluetooth or browser camera. */
+const {JSDOM}=require('jsdom'),fs=require('node:fs'),assert=require('node:assert/strict');
+const read=path=>fs.readFileSync(path,'utf8'),script=read('frontend/assets/sections.js');
+const wait=()=>new Promise(resolve=>setImmediate(resolve));
+function desk(path='frontend/scoreboard/control.html',url='http://local/scoreboard') {
+  return new JSDOM(read(path),{url,runScripts:'outside-only'});
+}
+(async()=>{
+  const dom=desk(),w=dom.window,d=w.document;
+  w.eval(script);w.CricketSections.init();
+  assert.equal(d.querySelectorAll('.section-toggle').length,11);
+  const team=d.getElementById('matchSettings'),button=team.querySelector('.section-toggle'),runs=d.querySelector('[name="runs"]');
+  runs.value='101';button.click();
+  assert.equal(button.type,'button');assert.equal(button.getAttribute('aria-expanded'),'false');
+  assert.equal(d.getElementById(button.getAttribute('aria-controls')).hidden,true);assert.equal(runs.value,'101');assert.equal(runs.disabled,false);
+  assert.equal(w.localStorage.getItem('cricket.sections.v1./scoreboard.score-teams'),'closed');
+  w.CricketSections.init();assert.equal(team.querySelectorAll('.section-toggle').length,1);
+  w.CricketSections.open('matchSettings');assert.equal(button.getAttribute('aria-expanded'),'true');
+  const stats=d.getElementById('statsEditor');assert.equal(stats.querySelector('.section-content').hidden,true);
+  d.querySelector('a[href="#statsEditor"]').click();await wait();
+  assert.equal(stats.querySelector('.section-content').hidden,false);
+  stats.querySelector('.section-toggle').click();d.querySelector('a[href="#statsEditor"]').click();await wait();
+  assert.equal(stats.querySelector('.section-content').hidden,false,'same-hash links still reopen folded controls');
+  assert.equal(d.getElementById('loadStats').closest('.section-collapse-header')!==null,true,'secondary heading actions remain independently clickable');
+  const restored=desk();restored.window.localStorage.setItem('cricket.sections.v1./scoreboard.score-teams','closed');
+  restored.window.eval(script);restored.window.CricketSections.init();assert.equal(restored.window.document.querySelector('#matchSettings .section-content').hidden,true);restored.window.close();
+  const blocked=desk();Object.defineProperty(blocked.window,'localStorage',{get(){throw Error('storage blocked');}});
+  blocked.window.eval(script);blocked.window.CricketSections.init();blocked.window.document.querySelector('#matchSettings .section-toggle').click();
+  assert.equal(blocked.window.document.querySelector('#matchSettings .section-content').hidden,true);blocked.window.close();
+  dom.window.close();
+  const replay=desk('frontend/umpire/index.html','http://local/umpire'),rw=replay.window,rd=rw.document;
+  rw.eval(script);rw.CricketSections.init();
+  assert.equal(rd.getElementById('cameraGrid').closest('#cameraWall')!==null,true);
+  assert.equal(rd.getElementById('previewSlot').parentElement.className,'studio-monitors');
+  assert.equal(rd.getElementById('replayTransport').closest('#replayViews'),null);
+  assert.equal(rd.getElementById('cameraPicker').closest('.section-content'),null,'camera picker remains outside folded views');
+  const tools=rd.querySelector('.review-tools');tools.open=false;rw.CricketSections.open('wicketMark');assert.equal(tools.open,true,'deep links expand native details ancestors');
+  replay.window.close();
+  const output=desk('frontend/broadcast/index.html','http://local/broadcast?clean=1'),ow=output.window,od=ow.document,callbacks=[];
+  let branding={logo:'data:image/png;base64,aGVsbG8=',visible:true,width_percent:12,margin_percent:3};
+  ow.AbortSignal.timeout=()=>undefined;ow.setTimeout=fn=>{callbacks.push(fn);return 1;};
+  ow.fetch=async()=>({ok:true,json:async()=>branding});
+  ow.eval(read('frontend/assets/broadcast-logo.js'));await wait();
+  const logo=od.getElementById('broadcastLogo');assert.equal(logo.hidden,false);assert.equal(logo.style.width,'12vw');assert.equal(logo.style.top,'3vh');assert.equal(logo.style.right,'3vw');
+  const before=logo.src;branding={...branding,visible:false};callbacks.shift()();await wait();assert.equal(logo.hidden,true);assert.equal(logo.src,before);
+  branding={...branding,logo:'',visible:true};callbacks.shift()();await wait();assert.equal(logo.hidden,true);assert.equal(logo.hasAttribute('src'),false);
+  branding={...branding,logo:'https://untrusted/logo.svg'};callbacks.shift()();await wait();assert.equal(logo.hasAttribute('src'),false);
+  ow.fetch=async()=>{throw Error('offline');};callbacks.shift()();await wait();assert.equal(callbacks.length,1,'logo polling survives a network interruption');
+  output.window.close();
+  for(const path of ['desktop/index.html','desktop/hardware.html','scoreboard/control.html','umpire/index.html','camera/index.html','broadcast/index.html'])assert.match(read('frontend/'+path),/app-theme\.css/);
+  assert.doesNotMatch(read('frontend/scoreboard/overlay.html'),/app-theme\.css/,'team graphics must not inherit the operator accent');
+  console.log('Operator DOM smoke passed: folding/persistence/anchors, intact forms and media parents, replay dialogs/transport, shared theme, clean-output logo size/visibility/removal/network retry');
+})().catch(error=>{console.error(error);process.exitCode=1;});

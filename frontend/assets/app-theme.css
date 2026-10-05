@@ -1,0 +1,142 @@
+/* Operator surfaces share the desktop palette. Never load this on /overlay. */
+:root {
+  color-scheme: dark;
+  --app-bg: #0d110f;
+  --app-panel: #151b18;
+  --app-line: #2c3731;
+  --app-text: #f0f3ed;
+  --app-muted: #9eaaa3;
+  --app-accent: #b8e34b;
+  --bg: var(--app-bg);
+  --panel: var(--app-panel);
+  --panel-2: #1b231e;
+  --line: var(--app-line);
+  --text: var(--app-text);
+  --muted: var(--app-muted);
+  --lime: var(--app-accent);
+  --red: var(--app-accent);
+  --red-dark: #91b735;
+  --green: var(--app-accent);
+  --amber: #f0ad4e;
+  --radius: 8px;
+  --shadow: none;
+  --studio-accent: var(--app-accent);
+}
+.app-ui { color: var(--app-text); background: var(--app-bg); font-family: "Segoe UI", Inter, system-ui, sans-serif; }
+.app-ui h1, .app-ui h2, .app-ui h3, .app-ui .brand-title {
+  font-family: inherit; text-transform: none; letter-spacing: -.025em; font-weight: 700;
+}
+.app-ui h1 { line-height: 1.1; }
+.app-ui h2 { font-size: 22px; }
+.desktop-ui .launch-card h2 { font-size: clamp(30px, 4vw, 52px); }
+.desktop-ui .launch-card.replay { background: #171e1a; }
+.desktop-ui .launch-card.score { background: #201c15; }
+.desktop-ui .nav { background: transparent; border: 0; color: var(--app-muted); box-shadow: none; }
+.desktop-ui .nav.active { background: #222b26; color: var(--app-text); box-shadow: inset 3px 0 var(--app-accent); }
+.desktop-ui .wordmark { color: var(--app-text); }
+.desktop-ui .framed iframe { background: var(--app-bg); }
+.app-ui h1 em { color: var(--app-accent); font-style: normal; }
+.app-ui p, .app-ui .hint, .app-ui .muted, .app-ui .field label, .app-ui label { color: var(--app-muted); }
+.app-ui a, .app-ui .eyebrow, .app-ui .brand-kicker { color: var(--app-accent); }
+.app-ui .eyebrow, .app-ui .brand-kicker { font-size: 10px; letter-spacing: .18em; }
+.app-ui .panel, .app-ui .card, .app-ui .on-air, .app-ui .message-row, .app-ui .settings-grid article,
+.app-ui .review-tools, .app-ui .buffer-details, .app-ui .capture-settings, .app-ui #calibrationPanel {
+  background: var(--app-panel); border-color: var(--app-line); border-radius: 8px; box-shadow: none;
+}
+.app-ui .topbar { background: #111613; backdrop-filter: none; }
+.app-ui .brand-title { font-size: 20px; }
+.app-ui .brand-mark { border-color: var(--app-accent); box-shadow: none; display: grid; place-items: center; flex-shrink: 0; }
+.app-ui .brand-mark::before { content: "BC"; position: static; background: none; transform: none; color: var(--app-accent); font-size: 12px; font-weight: 800; }
+.app-ui .brand-mark::after { display: none; }
+.app-ui button, .app-ui .btn, .app-ui .button, .app-ui input, .app-ui select, .app-ui textarea {
+  font-family: inherit; font-size: 13px; letter-spacing: normal; text-transform: none;
+  color: var(--app-text); background: #111613; border: 1px solid var(--app-line); border-radius: 6px;
+}
+.app-ui button, .app-ui .btn, .app-ui .button { min-height: 40px; font-weight: 600; box-shadow: none; }
+.app-ui .btn:hover, .app-ui button:hover, .app-ui .button:hover { background: #222b26; border-color: #657650; transform: none; }
+.app-ui .btn-primary, .app-ui .primary, .app-ui .graphic-buttons [aria-pressed="true"] {
+  background: var(--app-accent); border-color: var(--app-accent); color: var(--app-bg);
+}
+.app-ui .btn-primary:hover, .app-ui .primary:hover { background: #c8eb75; color: var(--app-bg); }
+.app-ui .btn-danger { color: #ff9292; }
+.app-ui :is(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid var(--app-accent); outline-offset: 3px; }
+.app-ui input:not([type="checkbox"]):not([type="range"]):not([type="color"]), .app-ui select, .app-ui textarea { min-height: 40px; }
+.app-ui input[type="checkbox"], .app-ui input[type="range"] { accent-color: var(--app-accent); }
+.app-ui .field label { text-transform: none; letter-spacing: normal; font-size: 12px; }
+.app-ui .desk-nav a, .app-ui .server-address, .app-ui code, .app-ui .stat, .app-ui .status-pill,
+.app-ui .toast, .app-ui .studio-state, .app-ui .angle-toolbar, .app-ui .angle-header,
+.app-ui .capture-zoom-dock, .app-ui .transport-dock, .app-ui .focus-audio { background: #111613; border-color: var(--app-line); }
+.app-ui .desk-nav a:hover { border-color: var(--app-accent); }
+.app-ui .edit-table th { color: var(--app-muted); }
+.app-ui .stats { color: var(--app-accent); }
+.app-ui.control .preview { max-height: 440px; margin: 0; border-color: var(--app-line); background: #111613; }
+.app-ui .edit-table td, .app-ui .edit-table th { border-color: var(--app-line); }
+.app-ui .edit-table input { background: var(--app-bg); }
+.app-ui .camera-tile, .app-ui .preview-empty { background: #111613; }
+.app-ui .stream-state.connected, .app-ui #phaseStatus, .app-ui #eventStatus { color: var(--app-accent); }
+.app-ui .status-pill.offline .status-dot { background: #ef7777; }
+.app-ui .signal-ring { color: var(--app-accent); border-color: #657650; background: #b8e34b0a; }
+.app-ui .studio-monitors > section { border-color: var(--app-line); background: #080b09; }
+.app-ui #previewSlot, .app-ui #programSlot { border-top-color: var(--app-accent); }
+.app-ui .angle-badge, .app-ui #programSlot .angle-badge { background: #222b26; color: var(--app-accent); }
+.app-ui .angle-thumb { background: #111613; border-color: var(--app-line); }
+.app-ui .angle-thumb.on-preview, .app-ui .angle-thumb.on-program { border-color: var(--app-accent); box-shadow: none; }
+.app-ui #previewEmpty, .app-ui #programEmpty { background: #111613; color: var(--app-muted); }
+.app-ui .empty-camera-slot span { color: var(--app-muted); }
+.app-ui .empty-camera-slot:hover { background: #222b26 !important; }
+.app-ui .camera-picker { background: #0d110fd9; }
+.app-ui #waveform, .app-ui #focusWaveform { background: #080b09; }
+.app-ui .mobile-view-tabs [aria-pressed="true"] { background: #222b26; border-color: var(--app-accent); }
+.app-ui #reviewButtons .btn { border-bottom-color: var(--app-accent); }
+.app-ui [data-collapsible] { min-width: 0; }
+.app-ui .section-collapsible { padding: 18px 22px; }
+.app-ui .section-collapse-header { display: flex; align-items: center; gap: 12px; margin: 0; width: 100%; }
+.app-ui .section-collapse-header h2 { flex: 1; min-width: 0; margin: 0; font-size: 20px; }
+.app-ui .section-collapse-header > span { color: var(--app-muted); font-size: 12px; }
+.app-ui button.section-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 44px; padding: 0; border: 0; background: none; color: var(--app-text);
+  font-size: inherit; font-weight: 700; text-align: left;
+}
+.app-ui .section-toggle:hover { color: var(--app-accent); background: none; }
+.app-ui .section-toggle::after { content: "−"; display: grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; color: var(--app-accent); border: 1px solid var(--app-line); border-radius: 5px; font: 20px/1 "Segoe UI", sans-serif; }
+.app-ui .section-toggle[aria-expanded="false"]::after { content: "+"; }
+.app-ui .section-content { margin-top: 16px; min-width: 0; }
+.app-ui .section-content > :first-child { margin-top: 0; }
+.app-ui #liveLaunch.section-collapsible { display: block; }
+.app-ui.replaying #liveLaunch { display: none; }
+.app-ui #liveLaunch .section-content { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.app-ui #replayViews, .app-ui #replaySources, .app-ui #cameraWall { border: 1px solid var(--app-line); background: var(--app-panel); border-radius: 8px; margin-bottom: 16px; }
+.app-ui #replaySources .source-grid { padding: 0; }
+.app-ui details > summary { cursor: pointer; min-height: 44px; align-content: center; color: var(--app-text); font-weight: 600; }
+.app-ui details > summary::marker { color: var(--app-accent); }
+.app-ui .logo-sample { display: flex; align-items: center; justify-content: center; min-height: 100px; padding: 12px; border: 1px dashed var(--app-line); border-radius: 6px; background: #111613; margin-bottom: 16px; }
+.app-ui .logo-sample img { max-width: 180px; max-height: 100px; object-fit: contain; }
+.app-ui [hidden] { display: none !important; }
+/* Keep the monitor's original slot parent and fullscreen height chain intact. */
+.app-ui .focus-mode #replaySources { display: none; }
+.app-ui .focus-mode #replayViews { height: 100%; padding: 0; margin: 0; border: 0; background: #000; }
+.app-ui .focus-mode #replayViews > .section-collapse-header { display: none; }
+.app-ui .focus-mode #replayViews > .section-content { height: 100%; margin: 0; }
+.app-ui.broadcast-ui { background: #000; }
+.app-ui .framed iframe { border-radius: 0; }
+.broadcast-ui #controls { background: #111613e8; }
+@media (max-width: 760px) {
+  .app-ui .section-collapsible { padding: 12px; }
+  .app-ui .section-collapse-header { flex-wrap: wrap; gap: 6px; }
+  .app-ui .section-collapse-header h2 { font-size: 18px; flex-basis: 100%; }
+  .app-ui .section-collapse-header > span { display: none; }
+  .app-ui .section-content { margin-top: 12px; }
+  .app-ui .brand-title { font-size: 15px; }
+  .app-ui.control { padding: 16px; }
+  .app-ui input:not([type="checkbox"]):not([type="range"]):not([type="color"]), .app-ui select, .app-ui textarea { font-size: 16px; }
+}
+@media (max-width: 850px) {
+  .desktop-ui .nav, .desktop-ui .nav.active { font-size: 0; }
+  .desktop-ui .frame-head { height: auto; min-height: 78px; flex-wrap: wrap; }
+  .desktop-ui .score-shortcuts { flex-wrap: wrap; gap: 6px; }
+  .desktop-ui .framed { display: none; height: 100dvh; min-height: 0; }
+  .desktop-ui .framed.active { display: flex; flex-direction: column; }
+  .desktop-ui .framed iframe { flex: 1; min-height: 0; height: auto; }
+}
+@media (max-width: 520px) { .desktop-ui .framed { height: calc(100dvh - 58px); } }

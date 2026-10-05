@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#07090c">
+  <meta name="theme-color" content="#0d110f">
   <title>Camera Setup · Backyard Cricket DRS</title>
   <link rel="stylesheet" href="/static/styles.css?v=0.15.2">
-<link rel="stylesheet" href="/static/studio.css?v=0.15.2"></head>
-<body>
+<link rel="stylesheet" href="/static/studio.css?v=0.15.2"><link rel="stylesheet" href="/static/app-theme.css?v=1.3.0"></head>
+<body class="app-ui">
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark" aria-hidden="true"></div>
@@ -32,7 +32,7 @@
         <div class="preview-label">LIVE CAMERA SOURCE</div>
       </div>
       <div class="capture-zoom-dock"><label for="cameraZoom">Zoom</label><input id="cameraZoom" type="range" min="1" max="4" step="0.01" value="1" disabled><button id="resetZoom" type="button" class="btn">Reset zoom</button><p id="zoomStatus" role="status">Test or connect a camera to enable zoom.</p><p>Use the slider or pinch the preview. Digital zoom crops the live feed and recorded replay. Keep the page visible. Recalibrate after changing camera or zoom.</p></div>
-<details class="capture-settings" open><summary>Camera setup · front/rear, quality &amp; microphone</summary>      <form id="cameraForm" class="setup-form" onsubmit="return false">
+<details class="capture-settings" data-collapsible="camera-setup" open><summary>Camera setup · front/rear, quality &amp; microphone</summary>      <form id="cameraForm" class="setup-form" onsubmit="return false">
         <div class="form-grid">
           <div class="field field-wide">
             <label for="cameraName">Camera name</label>
@@ -93,7 +93,7 @@
       <p id="videoLinkNote" role="status">Camera capture and replay are independent of live viewer links.</p>
       <button id="disconnectButton" class="btn btn-danger" style="margin-top:16px" type="button">Disconnect</button>
     </section>
-  <section class="panel side-panel"><button type="button" class="btn" id="enableAudio">Enable audio analysis / test mic</button><button type="button" class="btn" id="stopAudio">Stop analysis</button><p id="audioStatus">Tap to allow microphone access and speak. A moving dBFS reading confirms local capture. A connected camera also sends this mic to replay and broadcast. Stop analysis leaves camera sound on; choose Microphone → Disabled to stop capture.</p></section></main>
+  <section class="panel side-panel" data-collapsible="microphone-analysis" data-collapse-default="closed"><h2>Microphone analysis</h2><button type="button" class="btn" id="enableAudio">Enable audio analysis / test mic</button><button type="button" class="btn" id="stopAudio">Stop analysis</button><p id="audioStatus">Tap to allow microphone access and speak. A moving dBFS reading confirms local capture. A connected camera also sends this mic to replay and broadcast. Stop analysis leaves camera sound on; choose Microphone → Disabled to stop capture.</p></section></main>
   <div id="toast" class="toast" role="status"></div>
   <script>
     (function () {
@@ -114,7 +114,7 @@
       }, 2500);
     }());
   </script>
-  <script defer src="/static/common.js?v=0.15.2"></script>
+  <script defer src="/static/sections.js?v=1.3.0"></script><script defer src="/static/common.js?v=0.15.2"></script>
   <script defer src="/static/battery.js?v=1.1.2"></script>
   <script defer src="/static/recording.js?v=1.1.2"></script>
   <script defer src="/static/audio.js?v=1.1.0"></script><script defer src="/static/camera-optics.js?v=0.15.2"></script><script defer src="/static/camera.js?v=1.1.2"></script>

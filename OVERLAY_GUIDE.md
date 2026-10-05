@@ -35,6 +35,14 @@ The delay is approximately five seconds: native playback and preloaded overlappi
 
 **Retry video** restarts the selected buffer player. Keep the camera page visible and Studio running. Sound comes from the selected program camera only. The umpire wall stays live and muted. `/broadcast?delay=0` is an optional undelayed WebRTC diagnostic mode; its graphics are live as well. `/overlay` alone stays live — use the combined broadcast URL when video/audio/graphics must share the delay.
 
+## Broadcast logo and uncluttered controls
+
+The scoreboard, replay viewer, camera setup and main app use one dark-green/lime operator theme. Team-owned colours still apply to the on-air graphics. Press a section heading's **− / +** button to minimise or expand it; each browser remembers its own layout. This does not clear unsaved inputs or stop camera/replay playback. Replay transport and **Reopen scoreboard** stay available. Desktop shortcuts and scoreboard navigation reopen the section they target, even if it was minimised.
+
+In **Scoreboard → Broadcast logo** (also available from the desktop shortcut), upload a PNG or JPEG up to 1 MB. Transparent PNG works best. Set **Show broadcast logo**, its width as a percentage of the output, and its distance from the top and right edges, then press **Save logo**. A preview shows the selected image. **Remove logo** clears the selection; press **Save logo** to apply removal to the broadcast.
+
+The logo is saved on the Studio PC, separate from team logos and match history, and appears automatically on every `/broadcast` output, including `clean=1`. It updates within about two seconds without refreshing or restarting the video. It does not appear on `/overlay` alone or get burned into stored DRS clips. Use the combined clean broadcast URL as the single OBS video/audio source and use OBS to record it; no additional OBS image source is needed. The existing LAN address and shared HTTPS certificate remain unchanged.
+
 ## Match setup
 
 Set scheduled overs and wickets per innings before the first ball. Defaults are 20 overs and 10 wickets. Set an adjusted target explicitly when needed; otherwise the target is the first innings total plus one. Match title and venue appear on the large graphics.

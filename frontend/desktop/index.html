@@ -6,8 +6,9 @@
   <meta name="theme-color" content="#111613">
   <title>Backyard Cricket Studio</title>
   <link rel="stylesheet" href="/desktop.css?build=__STUDIO_BUILD__">
+  <link rel="stylesheet" href="/static/app-theme.css?v=1.3.0">
 </head>
-<body>
+<body class="app-ui desktop-ui">
   <aside class="rail">
     <a class="wordmark" href="#home" data-view="home" aria-label="Backyard Cricket Studio home"><span>BC</span><strong>Backyard<br>Cricket</strong></a>
     <nav aria-label="Application sections">
@@ -22,7 +23,7 @@
 
   <main>
     <section class="view active" id="view-home">
-      <header class="page-head"><div><p class="kicker">MATCH CONTROL</p><h1>Your ground, in one place.</h1><p class="lede">Run cameras, reviews and broadcast graphics from this PC. Phones and tablets only need a browser.</p></div><span class="version">Studio 1.2.0 · Overlay 0.5.0</span></header>
+      <header class="page-head"><div><p class="kicker">MATCH CONTROL</p><h1>Your ground, in one place.</h1><p class="lede">Run cameras, reviews and broadcast graphics from this PC. Phones and tablets only need a browser.</p></div><span class="version">Studio 1.3.0 · Overlay 0.6.0</span></header>
       <div class="hero-grid">
         <button class="launch-card replay" data-view="replay"><span class="number">01</span><div><p>DECISION REVIEW</p><h2>Replay Studio</h2><span>Connect field cameras, review incidents and inspect synchronized angles.</span></div><b>Open →</b></button>
         <button class="launch-card score" data-view="scoreboard"><span class="number">02</span><div><p>LIVE GRAPHICS</p><h2>Scoreboard</h2><span>Receive Play-Cricket scores or operate the overlay manually.</span></div><b>Open →</b></button>
@@ -36,7 +37,7 @@
     </section>
 
     <section class="view framed" id="view-replay"><header class="frame-head"><div><p class="kicker">BACKYARD DRS 0.15.2</p><h1>Replay Studio</h1></div><a href="/umpire" target="_blank">Open in browser ↗</a></header><iframe src="/umpire" title="Replay Studio"></iframe></section>
-    <section class="view framed" id="view-scoreboard"><header class="frame-head"><div><p class="kicker">BROADCAST DESK · OVERLAY 0.5.0</p><h1>Scoreboard</h1></div><nav class="score-shortcuts" aria-label="Broadcast shortcuts"><button type="button" data-score-section="graphicControls">Graphics</button><button type="button" data-score-section="wicketDetails">Wicket details</button><button type="button" data-score-section="statsEditor">Edit stats</button><a href="/overlay" target="_blank">Open overlay ↗</a></nav></header><iframe id="scoreboardFrame" src="/scoreboard?build=__STUDIO_BUILD__" title="Scoreboard controls"></iframe></section>
+    <section class="view framed" id="view-scoreboard"><header class="frame-head"><div><p class="kicker">BROADCAST DESK · OVERLAY 0.6.0</p><h1>Scoreboard</h1></div><nav class="score-shortcuts" aria-label="Broadcast shortcuts"><button type="button" data-score-section="graphicsOnAir">Graphics</button><button type="button" data-score-section="wicketDetails">Wicket details</button><button type="button" data-score-section="statsEditor">Edit stats</button><button type="button" data-score-section="broadcastBranding">Broadcast logo</button><a href="/broadcast" target="_blank">Open broadcast ↗</a></nav></header><iframe id="scoreboardFrame" src="/scoreboard?build=__STUDIO_BUILD__" title="Scoreboard controls"></iframe></section>
 
     <section class="view content" id="view-settings">
       <header class="page-head"><div><p class="kicker">SETTINGS</p><h1>Connections & output</h1></div></header>
@@ -57,6 +58,6 @@
       <details><summary>Overlay and DRS together</summary><p>The same umpire camera can remain connected to DRS while its live view is used for production. Add the scoreboard overlay above that video source in OBS. DRS recording and overlay graphics share this server but remain separate layers.</p></details>
     </section>
   </main>
-  <script src="/desktop.js?build=__STUDIO_BUILD__"></script>
+  <script src="/static/sections.js?v=1.3.0"></script><script src="/desktop.js?build=__STUDIO_BUILD__"></script>
 </body>
 </html>

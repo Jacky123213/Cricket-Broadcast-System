@@ -17,6 +17,21 @@ DEFAULT = dict(team1='HOME', team2='AWAY', color1='#ec218c', color2='#ff922e',
                last_wicket_runs='', last_wicket_balls='', last_wicket_bowler='', last_wicket_fielder='')
 
 WICKET_FIELDS = tuple(k for k in DEFAULT if k.startswith('last_wicket_'))
+BRANDING_DEFAULT = dict(logo='', visible=True, width_percent=8, margin_percent=2)
+
+
+def validate_branding(data):
+    import math
+    if not isinstance(data, dict): raise ValueError('Expected a logo settings object')
+    for key, value in data.items():
+        if key not in BRANDING_DEFAULT: raise ValueError('Unknown logo setting: ' + key)
+        if key == 'logo': validate({'logo1': value})
+        elif key == 'visible':
+            if not isinstance(value, bool): raise ValueError('Logo visibility must be true/false')
+        else:
+            low, high = (3, 25) if key == 'width_percent' else (0, 10)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not low <= value <= high:
+                raise ValueError(f'{key} must be between {low} and {high}')
 
 
 def team_key(name):
@@ -70,6 +85,15 @@ class State:
         self.program_history = deque(maxlen=400)
         self.error = ''
         self.teams = {}
+        self.branding = copy.deepcopy(BRANDING_DEFAULT)
+        branding_path = self.folder / 'branding.json'
+        if branding_path.exists():
+            try:
+                saved_branding = json.loads(branding_path.read_text('utf-8'))
+                validate_branding(saved_branding)
+                self.branding.update(saved_branding)
+            except (ValueError, OSError, TypeError) as exc:
+                self.error = 'Could not restore broadcast logo: ' + str(exc)
         self.graphics = BroadcastGraphics()
         graphics_path = self.folder / 'broadcast.json'
         if graphics_path.exists():
@@ -125,7 +149,7 @@ class State:
             result = dict(score=copy.deepcopy(self.data), status=self.status,
                         last_packet=self.last_packet, last_score=self.last_score,
                         packet_count=self.count, logs=list(self.logs), error=self.error,
-                        server_time=now, graphics=graphics,
+                        server_time=now, graphics=graphics, branding=copy.deepcopy(self.branding),
                         team_appearance=[{'name': p['name'], 'color': p['color']} for p in self.teams.values()])
             # Keep playout history in memory only; never include receiver logs.
             program = {k: result[k] for k in ('score','graphics','last_score','server_time')}
@@ -195,6 +219,18 @@ class State:
         with self.lock:
             self.graphics.configure(changes)
             self._save_graphics()
+
+    def branding_snapshot(self):
+        with self.lock: return copy.deepcopy(self.branding)
+
+    def save_branding(self, changes):
+        validate_branding(changes)
+        with self.lock:
+            updated = {**self.branding, **changes}
+            temp = self.folder / 'branding.tmp'
+            temp.write_text(json.dumps(updated), encoding='utf-8')
+            os.replace(temp, self.folder / 'branding.json')
+            self.branding = updated
 
     def broadcast_action(self, command):
         if not isinstance(command, dict): raise ValueError('Expected an action object')

@@ -3,8 +3,8 @@ import hashlib
 
 from .config import PROJECT_ROOT
 
-APP_VERSION = "1.2.0"
-SCOREBOARD_VERSION = "0.5.0"
+APP_VERSION = "1.3.0"
+SCOREBOARD_VERSION = "0.6.0"
 
 
 def ui_build_id() -> str:

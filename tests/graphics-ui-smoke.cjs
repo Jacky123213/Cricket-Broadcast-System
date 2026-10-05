@@ -44,6 +44,7 @@ const graphics={active:{kind:'wicket_card',innings:0,reason:'Manual',until:null}
  const desk=new JSDOM(read('frontend/scoreboard/control.html'),{url:'http://local/scoreboard',runScripts:'outside-only'}),dw=desk.window,dd=dw.document,posts=[];
  const score={source:'manual',team1:'Pavilion',team2:'Creek',color1:'#14b8a6',color2:'#f6b342',visible:true,banner:'Backyard'};
  dw.AbortSignal.timeout=()=>undefined;dw.fetch=async(url,opts)=>{if(opts?.method==='POST')posts.push({url,data:JSON.parse(opts.body)});return {ok:true,json:async()=>url==='/api/server-info'?{overlay_urls:['http://local/overlay'],secure_context:false}:{score,graphics,team_appearance:[],logs:[],server_time:100,last_score:null,packet_count:0,status:'Ready'}};};
+ dw.eval(read('frontend/assets/sections.js'));dw.CricketSections.init();
  dw.eval(read('frontend/scoreboard/control.js'));await wait();await wait();
  assert.equal(dd.getElementById('battingRows').querySelectorAll('input').length,7);
  dd.getElementById('wicketType').value='Caught';dd.getElementById('wicketBowler').value='Dee';dd.getElementById('wicketFielder').value='Bo';
