@@ -1,6 +1,24 @@
 'use strict';
 const $=id=>document.getElementById(id),form=$('settings'),broadcast=$('broadcastSettings');
 let initialized=false,latest=null,statsLoaded=false;
+const surgeChanges=new Map();
+function surgeStart(index){return surgeChanges.has(String(index))?surgeChanges.get(String(index)):latest?.graphics.config.power_surge_starts?.[index]||0;}
+function updateSurgeControls(){
+  const innings=$('powerSurgeInnings'),keys=[0,1].map(n=>n+':'+(latest?.graphics.innings[n]?.team||'')).join('|');
+  if(innings.dataset.keys!==keys){const selected=innings.value;innings.dataset.keys=keys;innings.replaceChildren(...[0,1].map(n=>Object.assign(document.createElement('option'),{value:String(n),textContent:latest?.graphics.innings[n]?(n+1)+'. '+latest.graphics.innings[n].team:n===0?'First innings':'Second innings'})));innings.value=selected||'0';}
+  const select=$('powerSurgeStart'),start=surgeStart(innings.value),powerplay=Number(broadcast.elements.powerplay_overs.value),total=Number(broadcast.elements.total_overs.value),valid=Number.isInteger(powerplay)&&powerplay>0&&powerplay<=100&&Number.isInteger(total)&&total>0&&total<=100,lastStart=Math.floor((total*6-powerplay*3)/6)+1;
+  const setup=JSON.stringify([innings.value,start,powerplay,total]);if(select.dataset.setup===setup)return;select.dataset.setup=setup;
+  const options=[Object.assign(document.createElement('option'),{value:'0',textContent:'Off / not selected'})];
+  if(valid)for(let n=powerplay+1;n<=lastStart;n++)options.push(Object.assign(document.createElement('option'),{value:String(n),textContent:'Over '+n}));
+  const fits=!start||valid&&start>powerplay&&start<=lastStart;
+  if(start&&!fits)options.push(Object.assign(document.createElement('option'),{value:String(start),textContent:'Over '+start+' · does not fit this setup'}));
+  select.replaceChildren(...options);select.value=String(start);select.disabled=!valid&&!start;
+  const length=powerplay*3,whole=Math.floor(length/6),partial=length%6,duration=[whole?whole+' over'+(whole===1?'':'s'):'',partial?partial+' balls':''].filter(Boolean).join(' ');
+  $('powerSurgeRange').textContent=!valid?'Set Power Play overs first. Clear any selected Surge before switching Power Play off.':!fits?'This range does not fit. Choose a start after the Power Play with room for '+duration+'.':!start?'Length: '+duration+' (half the Power Play). Select the first over; the on-air badge stays manual.':'Length: '+duration+' · '+(partial?'Overs '+start+'–'+(start+whole)+' (first '+partial+' balls of over '+(start+whole)+')':'Overs '+start+'–'+(start+whole-1))+'. Save match setup to apply.';
+}
+$('powerSurgeInnings').onchange=updateSurgeControls;
+$('powerSurgeStart').onchange=()=>{surgeChanges.set($('powerSurgeInnings').value,Number($('powerSurgeStart').value));updateSurgeControls();};
+for(const key of ['powerplay_overs','total_overs'])broadcast.elements[key].addEventListener('input',updateSurgeControls);
 const appearanceChanges=new Map(),teamKey=name=>name.trim().replace(/\s+/g,' ').toLowerCase();
 const editAppearance=n=>{const key=teamKey(form.elements['team'+n].value);if(!appearanceChanges.has(key))appearanceChanges.set(key,{});return appearanceChanges.get(key);};
 function appearanceLabels(){for(const n of [1,2]){const name=form.elements['team'+n].value,key=teamKey(name),profile=latest?.team_appearance?.find(p=>teamKey(p.name)===key),draft=appearanceChanges.get(key);$('color'+n+'Label').textContent=(name||'Team')+' colour';$('logo'+n+'Label').textContent=(name||'Team')+' logo · PNG/JPEG';if(draft?.color)form.elements['color'+n].value=draft.color;else if(profile)form.elements['color'+n].value=profile.color;}}
@@ -35,6 +53,7 @@ function addMessage(message={type:'custom'}){
 $('addMessage').onclick=()=>addMessage();
 broadcast.onsubmit=async event=>{event.preventDefault();const data={};for(const [key,value] of new FormData(broadcast)){data[key]=['total_overs','wickets_limit','interval_seconds','graphic_seconds','powerplay_overs'].includes(key)?Number(value):key==='target'?(value===''?null:Number(value)):value;}
   for(const key of ['auto_drinks','auto_innings_break','auto_summary','auto_wicket'])data[key]=broadcast.elements[key].checked;
+  data.power_surge_starts={...latest?.graphics.config.power_surge_starts};for(const [index,start] of surgeChanges){if(start)data.power_surge_starts[index]=start;else delete data.power_surge_starts[index];}
   data.messages=[...$('messages').children].map(box=>{const type=box.querySelector('select').value;const keys=type==='custom'?['text']:type==='attendance'?['attendance']:['team1','team2','wins1','wins2'];return Object.fromEntries([['type',type],...keys.map(key=>[key,box.querySelector('[data-field="'+key+'"]').value])]);});
   try{await post('/api/scoreboard/broadcast/settings',data);await post('/api/scoreboard/settings',{banner:$('mainBanner').value});$('broadcastSave').textContent='Saved';error('');}catch(e){error(e.message);}
 };
@@ -73,11 +92,11 @@ $('statistics').onsubmit=async event=>{event.preventDefault();if(!$('statsInning
 };
 function inningsOptions(graphics){for(const id of ['graphicInnings','statsInnings','wicketInnings']){const select=$(id),value=select.value;const keys=graphics.innings.map((i,n)=>n+':'+i.team).join('|');if(select.dataset.keys===keys)continue;select.dataset.keys=keys;select.replaceChildren(...graphics.innings.map((i,n)=>{const option=document.createElement('option');option.value=String(n);option.textContent=(n+1)+'. '+i.team;return option;}));select.value=value!==''&&graphics.innings[Number(value)]?value:String(Math.max(0,graphics.innings.length-1));}dismissalOptions();if(!statsLoaded&&graphics.innings.length)loadStats();}
 async function poll(){try{const response=await fetch('/api/scoreboard/state',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!response.ok)throw Error('Server response '+response.status);latest=await response.json();$('btStatus').textContent=latest.status;$('packetCount').textContent=latest.packet_count+' packets';$('lastUpdate').textContent=latest.last_score===null?'No recognised live score received':'Score update '+Math.floor(latest.server_time-latest.last_score)+'s ago';
-  if(!initialized){for(const [key,value] of Object.entries(latest.score)){const el=form.elements.namedItem(key);if(el)el.type==='checkbox'?el.checked=value:el.value=value;}$('mainBanner').value=latest.score.banner;for(const [key,value] of Object.entries(latest.graphics.config)){const el=broadcast.elements.namedItem(key);if(el)el.type==='checkbox'?el.checked=value:el.value=value??'';}$('messages').replaceChildren();latest.graphics.config.messages.forEach(addMessage);initialized=true;autoFields();}
+  if(!initialized){surgeChanges.clear();for(const [key,value] of Object.entries(latest.score)){const el=form.elements.namedItem(key);if(el)el.type==='checkbox'?el.checked=value:el.value=value;}$('mainBanner').value=latest.score.banner;for(const [key,value] of Object.entries(latest.graphics.config)){const el=broadcast.elements.namedItem(key);if(el)el.type==='checkbox'?el.checked=value:el.value=value??'';}$('messages').replaceChildren();latest.graphics.config.messages.forEach(addMessage);initialized=true;autoFields();}
   if(form.elements.source.value==='bluetooth')form.querySelectorAll('[data-auto]').forEach(el=>el.value=latest.score[el.name]);
   appearanceLabels();
   if(!brandingLoaded&&latest.branding){const b=latest.branding;brandingLogo=b.logo||'';$('brandingVisible').checked=b.visible;$('brandingWidth').value=b.width_percent;$('brandingMargin').value=b.margin_percent;logoPreview();brandingLoaded=true;}
-  inningsOptions(latest.graphics);const g=latest.graphics;$('phaseStatus').textContent=g.phase==='complete'?'Full time'+(g.summary_due_in!==null?' · Summary in '+g.summary_due_in+'s':''):g.phase==='innings_break'?'Innings break':'Innings '+Math.max(1,g.innings.length)+' · Live';$('stripStatus').textContent=g.active?'ON AIR · '+g.active.kind.replaceAll('_',' '):g.strip.text;
+  inningsOptions(latest.graphics);updateSurgeControls();const g=latest.graphics;$('phaseStatus').textContent=g.phase==='complete'?'Full time'+(g.summary_due_in!==null?' · Summary in '+g.summary_due_in+'s':''):g.phase==='innings_break'?'Innings break':'Innings '+Math.max(1,g.innings.length)+' · Live';$('stripStatus').textContent=g.active?'ON AIR · '+g.active.kind.replaceAll('_',' '):g.strip.text;
   $('powerSurgeToggle').textContent=g.power_surge?'06 · Power Surge off':'06 · Power Surge on';$('powerSurgeToggle').setAttribute('aria-pressed',String(g.power_surge));
   $('logs').textContent=latest.logs.slice(-20).reverse().map(p=>new Date(p.at*1000).toLocaleTimeString()+' '+p.text+'\n'+(Object.keys(p.fields).length?'Mapped: '+JSON.stringify(p.fields):'Unmapped · '+p.hex)).join('\n\n')||'Waiting for packets…';
   if(latest.error)error(latest.error);

@@ -265,8 +265,10 @@ def test_manual_graphics_hold_and_automatic_graphics_cannot_preempt():
     engine.action({'action':'show','kind':'power_surge'},s,10002)
     assert engine.snapshot(s,10003)['power_surge']
     engine.action({'action':'hide'},s,10004)
-    assert engine.active is None and not engine.power_surge
+    assert engine.active is None and engine.power_surge, 'Closing a full card restores the independent Surge badge'
     assert engine.phase=='innings_break', 'Reopen scoreboard must not undo the match phase'
+    engine.action({'action':'power_surge_off'},s,10005)
+    assert not engine.power_surge
 
 
 def test_wicket_panel_calculates_complete_shots_and_corrects_dismissal():
@@ -360,6 +362,55 @@ def test_first_overs_setting_validated_and_persisted(tmp_path):
         with pytest.raises(ValueError):validate_config({'powerplay_overs':value})
     state.broadcast_settings({'powerplay_overs':0})
     assert state.graphics.config['powerplay_overs']==0
+
+
+def test_surge_ranges_are_per_innings_persisted_and_reset(tmp_path):
+    state = State(tmp_path)
+    state.broadcast_settings({'powerplay_overs':4, 'power_surge_starts':{'0':15, '1':17}})
+    state.save(scoreboard(runs='60', overs='10.0'))
+    state.flush()
+    state.broadcast_action({'action':'end_innings'})
+    state.broadcast_action({'action':'start_chase'})
+    assert state.snapshot()['graphics']['config']['power_surge_starts'] == {'0':15, '1':17}
+    restored = State(tmp_path)
+    assert restored.graphics.config['power_surge_starts'] == {'0':15, '1':17}
+    restored.reset()
+    assert restored.graphics.config['power_surge_starts'] == {}
+    assert restored.graphics.config['powerplay_overs'] == 4
+    assert State(tmp_path).graphics.config['power_surge_starts'] == {}
+
+
+@pytest.mark.parametrize('value', [None, [], {'2':15}, {0:15}, {'0':True}, {'0':'15'}, {'1':15.5}, {'0':-1}, {'0':101}])
+def test_surge_start_map_requires_valid_innings_and_whole_over(value):
+    with pytest.raises(ValueError):
+        validate_config({'power_surge_starts':value})
+
+
+def test_surge_range_validation_is_atomic_and_uses_half_powerplay_in_balls():
+    engine = BroadcastGraphics()
+    engine.configure({'powerplay_overs':4, 'power_surge_starts':{'0':19}})  # 19–20, exactly fits
+    original = copy.deepcopy(engine.config)
+    for changes in ({'powerplay_overs':0}, {'total_overs':19}, {'power_surge_starts':{'0':4}},
+                    {'power_surge_starts':{'0':20}}, {'power_surge_starts':{'0':15,'1':20}}):
+        with pytest.raises(ValueError):
+            engine.configure(changes)
+        assert engine.config == original
+    engine.configure({'powerplay_overs':5, 'power_surge_starts':{'0':18}})  # 18, 19 + first 3 balls of 20
+    with pytest.raises(ValueError):
+        engine.configure({'power_surge_starts':{'0':19}})  # 2.3, not rounded down to 2
+    engine.configure({'powerplay_overs':0, 'power_surge_starts':{}})
+    assert engine.config['power_surge_starts'] == {}
+    # Old saved matches have no Surge range and still open unchanged.
+    assert BroadcastGraphics({'config':{'powerplay_overs':4}}).config['power_surge_starts'] == {}
+
+
+def test_surge_settings_http_validate_combined_setup(tmp_path):
+    state = State(tmp_path/'scores')
+    with patch('server.main.start_receiver'), TestClient(create_app(Settings(database_path=tmp_path/'test.db'),scoreboard=state)) as client:
+        route = '/api/scoreboard/broadcast/settings'
+        assert client.post(route,json={'powerplay_overs':4,'power_surge_starts':{'0':15}}).status_code == 200
+        assert client.post(route,json={'power_surge_starts':{'0':20}}).status_code == 400
+        assert client.get('/api/scoreboard/state').json()['graphics']['config']['power_surge_starts'] == {'0':15}
 
 
 def test_second_innings_runs_do_not_create_wickets_or_end_match(tmp_path):

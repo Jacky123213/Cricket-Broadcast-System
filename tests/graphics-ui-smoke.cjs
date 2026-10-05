@@ -18,6 +18,7 @@ const graphics={active:{kind:'wicket_card',innings:0,reason:'Manual',until:null}
    const view={...graphics,active:{kind,innings:0,reason:'Manual',until:null},result:''};
    assert.equal(w.BackyardGraphics.render(view,{visible:true,bowler:'Dee'}),true,kind+' must open');
    assert.equal(d.getElementById(kind==='innings_break'?'breakGraphic':'statGraphic').hidden,false);
+   assert.equal(d.getElementById('powerSurge').hidden,kind!=='innings_break','Surge badge never overlaps a full-size graphic');
    if(kind==='batting_card'){assert.match(d.getElementById('statGraphic').textContent,/BATTERDISMISSALRUNSBALLS/);assert.equal(d.querySelectorAll('.batting-card tbody tr').length,1);}
    if(kind==='bowling_card'){
      assert.equal(d.querySelector('.graphic-heading h1').textContent,'Creek');
@@ -30,6 +31,8 @@ const graphics={active:{kind:'wicket_card',innings:0,reason:'Manual',until:null}
    }
    if(kind==='match_summary')assert.equal(d.querySelector('.summary-list:nth-child(2) .summary-player strong').textContent,'2–6');
  }
+ w.BackyardGraphics.render({...graphics,active:null},{visible:true});
+ assert.equal(d.getElementById('powerSurge').hidden,false,'held Surge returns when the full-size graphic closes');
  const chaseBowling={...graphics,active:{kind:'bowling_card',innings:0,reason:'Manual',until:null},innings:[innings,{...innings,team:'Creek',opposition:'Pavilion',color:'#f6b342',opposition_color:'#14b8a6',opposition_logo:'/pavilion.png'}]};
  w.BackyardGraphics.render(chaseBowling,{visible:true});
  assert.equal(d.querySelector('.graphic-heading h1').textContent,'Pavilion','bowling card follows the current opposition even when held across an innings change');
@@ -38,6 +41,18 @@ const graphics={active:{kind:'wicket_card',innings:0,reason:'Manual',until:null}
  const chartView={...graphics,active:{kind:'run_chart',innings:0,reason:'Manual',until:null},config:{...graphics.config,powerplay_overs:4}};
  w.BackyardGraphics.render(chartView,{visible:true});assert.equal(d.querySelector('.powerplay-label').textContent,'POWER PLAY');
  assert.equal(d.querySelectorAll('rect[fill="url(#powerplayFill)"]').length,4);assert.equal(d.querySelectorAll('rect[fill="var(--graphic-team)"]').length,5);
+ chartView.config.power_surge_starts={'0':7,'1':15};w.BackyardGraphics.render(chartView,{visible:true});
+ assert.equal(d.querySelector('.power-surge-label').textContent,'POWER SURGE');
+ assert.equal(d.querySelectorAll('rect[fill="url(#powerSurgeFill)"]').length,2,'four-over Power Play gives a two-over Surge');
+ assert.equal(d.querySelectorAll('[data-surge-balls="6"]').length,2);
+ assert.match(d.querySelector('.run-chart').getAttribute('aria-label'),/OVERS 7–8/);
+ const chartChase={...chartView,active:{...chartView.active,innings:1},innings:[innings,{...innings,color:'#f6b342'}]};
+ w.BackyardGraphics.render(chartChase,{visible:true});assert.match(d.querySelector('.run-chart').getAttribute('aria-label'),/OVERS 15–16/,'second innings uses its own range');
+ chartView.config.powerplay_overs=5;w.BackyardGraphics.render(chartView,{visible:true});
+ assert.equal(d.querySelectorAll('[data-surge-balls="6"]').length,2);assert.equal(d.querySelectorAll('[data-surge-balls="3"]').length,1);
+ assert.match(d.querySelector('.chart-period-note').textContent,/FIRST 3 BALLS OF OVER 9/);assert.match(d.querySelector('.surge-partial title').textContent,/whole-over run total/);
+ w.BackyardGraphics.render({...chartView,active:null},{visible:true});
+ assert.match(d.getElementById('powerSurge').textContent,/OVERS 7–9 · FIRST 3 BALLS OF OVER 9/);
  chartView.config.powerplay_overs=0;w.BackyardGraphics.render(chartView,{visible:true});assert.equal(d.querySelector('.powerplay-bracket'),null,'config-only change redraws the chart');
  dom.window.close();
 
@@ -46,6 +61,16 @@ const graphics={active:{kind:'wicket_card',innings:0,reason:'Manual',until:null}
  dw.AbortSignal.timeout=()=>undefined;dw.fetch=async(url,opts)=>{if(opts?.method==='POST')posts.push({url,data:JSON.parse(opts.body)});return {ok:true,json:async()=>url==='/api/server-info'?{overlay_urls:['http://local/overlay'],secure_context:false}:{score,graphics,team_appearance:[],logs:[],server_time:100,last_score:null,packet_count:0,status:'Ready'}};};
  dw.eval(read('frontend/assets/sections.js'));dw.CricketSections.init();
  dw.eval(read('frontend/scoreboard/control.js'));await wait();await wait();
+ const setup=dd.getElementById('broadcastSettings'),powerplay=setup.elements.powerplay_overs,start=dd.getElementById('powerSurgeStart'),surgeInnings=dd.getElementById('powerSurgeInnings');
+ powerplay.value='4';powerplay.dispatchEvent(new dw.Event('input'));assert.equal(start.disabled,false);assert.equal(start.options[start.options.length-1].value,'19');
+ start.value='15';start.dispatchEvent(new dw.Event('change'));assert.match(dd.getElementById('powerSurgeRange').textContent,/Length: 2 overs · Overs 15–16/);
+ surgeInnings.value='1';surgeInnings.dispatchEvent(new dw.Event('change'));start.value='17';start.dispatchEvent(new dw.Event('change'));
+ surgeInnings.value='0';surgeInnings.dispatchEvent(new dw.Event('change'));assert.equal(start.value,'15','switching innings retains unsaved range choices');
+ setup.dispatchEvent(new dw.Event('submit',{cancelable:true}));await wait();await wait();
+ assert.deepEqual(posts.find(p=>p.url==='/api/scoreboard/broadcast/settings').data.power_surge_starts,{'0':15,'1':17});
+ powerplay.value='5';powerplay.dispatchEvent(new dw.Event('input'));assert.match(dd.getElementById('powerSurgeRange').textContent,/2 overs 3 balls.*first 3 balls of over 17/);
+ setup.elements.total_overs.value='16';setup.elements.total_overs.dispatchEvent(new dw.Event('input'));assert.equal(start.value,'15');assert.match(dd.getElementById('powerSurgeRange').textContent,/does not fit/);
+ start.value='0';start.dispatchEvent(new dw.Event('change'));assert.match(dd.getElementById('powerSurgeRange').textContent,/Select the first over/);
  assert.equal(dd.getElementById('battingRows').querySelectorAll('input').length,7);
  dd.getElementById('wicketType').value='Caught';dd.getElementById('wicketBowler').value='Dee';dd.getElementById('wicketFielder').value='Bo';
  dd.querySelector('#dismissalForm button[name="show"]').click();await wait();assert.equal(posts.at(-1).data.dismissal,'c Bo b Dee');assert.equal(posts.at(-1).data.show,true);
@@ -76,5 +101,5 @@ const graphics={active:{kind:'wicket_card',innings:0,reason:'Manual',until:null}
  pw.dispatchEvent(new pw.MessageEvent('message',{source:pw.parent,origin:'http://untrusted',data:{type:'broadcast-time',at:96}}));
  polls.shift()();await wait();assert.equal(calls.at(-1),'/api/scoreboard/program-state?at=95','foreign pages cannot change playout time');
  program.window.close();
- console.log('Graphics DOM smoke passed: all seven graphics, batting/bowling cards, opposing team colours/logos, wickets–runs figures, st wk/6 and Out corrections, first-X-over chart, manual controls and delayed rendering');
+ console.log('Graphics DOM smoke passed: all seven graphics, team colours/logos, half-length per-innings Surge ranges, odd lengths, held badge/full-card priority, draft selectors, manual controls and delayed rendering');
 })().catch(error=>{console.error(error);process.exitCode=1;});

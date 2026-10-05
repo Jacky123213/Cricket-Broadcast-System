@@ -16,7 +16,7 @@ DEFAULT_CONFIG = {
     "rotation_mode": "mixed", "interval_seconds": 10, "graphic_seconds": 25,
     "auto_drinks": True, "auto_innings_break": True, "auto_summary": True, "auto_wicket": True,
     "match_title": "BACKYARD CRICKET", "venue": "", "messages": [],
-    "result_override": "", "powerplay_overs": 0,
+    "result_override": "", "powerplay_overs": 0, "power_surge_starts": {},
 }
 KINDS = {"run_chart", "batting_card", "bowling_card", "innings_break", "match_summary", "wicket_card", "power_surge"}
 
@@ -49,6 +49,11 @@ def validate_config(changes):
         elif key == "target":
             if value is not None and (type(value) is not int or not 1 <= value <= 9999):
                 raise ValueError("Target must be a positive number or blank")
+        elif key == "power_surge_starts":
+            if not isinstance(value, dict) or set(value) - {"0", "1"}:
+                raise ValueError("Select a Power Surge start for the first or second innings")
+            if any(type(start) is not int or not 0 <= start <= 100 for start in value.values()):
+                raise ValueError("Power Surge first over must be a whole number between 1 and 100, or 0 for off")
         elif key == "rotation_mode":
             if value not in ("mixed", "automatic", "manual"): raise ValueError("Invalid strip mode")
         elif key == "messages":
@@ -62,6 +67,20 @@ def validate_config(changes):
                     if item.get(field) and not item[field].isdigit(): raise ValueError(f"{field} must be a whole number")
         elif not isinstance(value, str) or len(value) > 160:
             raise ValueError(f"{key} must be text up to 160 characters")
+
+
+def validate_surge_ranges(config):
+    # Use legal balls: half of an odd Power Play is still exact (e.g. 5 -> 2.3).
+    powerplay = config["powerplay_overs"]
+    for start in config["power_surge_starts"].values():
+        if not start:
+            continue
+        if not powerplay:
+            raise ValueError("Set Power Play overs before selecting a Power Surge")
+        if start <= powerplay:
+            raise ValueError("Power Surge must start after the Power Play")
+        if (start - 1) * 6 + powerplay * 3 > config["total_overs"] * 6:
+            raise ValueError("Power Surge must fit within the scheduled innings overs")
 
 
 def new_innings(score):
@@ -94,6 +113,7 @@ class BroadcastGraphics:
         if saved:
             validate_config(saved.get("config", {}))
             self.config.update(saved.get("config", {}))
+            validate_surge_ranges(self.config)
             self.innings = saved.get("innings", [])
             self.phase = saved.get("phase", "live")
             self.finished_at = saved.get("finished_at")
@@ -105,7 +125,9 @@ class BroadcastGraphics:
 
     def configure(self, changes):
         validate_config(changes)
-        self.config.update(copy.deepcopy(changes))
+        proposed = {**self.config, **copy.deepcopy(changes)}
+        validate_surge_ranges(proposed)
+        self.config = proposed
         self.next_strip_at = 0
         self.dirty = True
 
@@ -383,7 +405,7 @@ class BroadcastGraphics:
         self.flush(now, force=True)
         kind = command.get("action")
         if kind == "show": self.show(command.get("kind"), now, innings=command.get("innings"))
-        elif kind == "hide": self.active = None; self.power_surge = False
+        elif kind == "hide": self.active = None
         elif kind == 'power_surge_off': self.power_surge = False
         elif kind == 'wicket_details':
             self.wicket_details(command)

@@ -282,7 +282,7 @@ class State:
             self.decoder = ScoreDecoder()
             self.last_score = None
             config = copy.deepcopy(self.graphics.config)
-            config.update(target=None, result_override='')
+            config.update(target=None, result_override='', power_surge_starts={})
             self.graphics = BroadcastGraphics()
             self.graphics.configure(config)
             self._save_graphics()
