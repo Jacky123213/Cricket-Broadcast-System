@@ -25,3 +25,11 @@ test('audio is unavailable without samples, and suspended is not a zero/silence 
  m.context.state='running';m.nodes.set(v,{data:new Float32Array(4),analyser:{getFloatTimeDomainData:data=>data.fill(.1)}});assert.ok(Math.abs(m.sample(v,true).meter_dbfs+20)<.01);
  m.nodes.get(v).analyser.getFloatTimeDomainData=data=>data.fill(0);assert.equal(m.sample(v,true).meter_dbfs,-120);
 });
+test('meter audio routes only the active decoder, never a warming standby clip',()=>{
+ const meter=new AudioMeter(),a={},b={},gainA={gain:{value:0}},gainB={gain:{value:0}};
+ meter.nodes.set(a,{gain:gainA});meter.nodes.set(b,{gain:gainB});meter.select(a);meter.mute(false);
+ assert.equal(gainA.gain.value,1);assert.equal(gainB.gain.value,0);
+ meter.select(b);assert.equal(gainA.gain.value,0);assert.equal(gainB.gain.value,1);
+ meter.mute(true);assert.equal(gainA.gain.value,0);assert.equal(gainB.gain.value,0);
+ meter.select(a);assert.equal(gainA.gain.value,0,'silent preview stays silent after every handover');
+});

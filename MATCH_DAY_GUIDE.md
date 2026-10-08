@@ -1,6 +1,12 @@
 # Match Day production desk
 
-Studio 1.5.0 · Graphics 0.7.1. Open the desktop app's **Match Day** tab (the new default) or `/match-day`. Match setup, statistics corrections, detailed umpire review and troubleshooting remain separate, linked at the top.
+Studio 1.5.1 · Graphics 0.7.2. Open the desktop app's **Match Day** tab (the new default) or `/match-day`. Match setup, statistics corrections, detailed umpire review and troubleshooting remain separate, linked at the top.
+
+## Run the PC as the server only
+
+Turn **Live views on this screen** off in the desktop sidebar. This unloads the window's Match Day preview and Replay Studio, stopping their video downloads/decoders and local review. The server keeps receiving cameras/scores; iPad controls and OBS output continue. Scoreboard drafts are not unloaded. Server status and settings remain available.
+
+This preference is saved only in that browser/desktop window's storage, not as a server-wide command. Other browser tabs are independent: close any extra PC broadcast/umpire tabs you do not need. Turn it on again to reopen the selected live section. Replay Studio is now loaded only when first opened, so it does not subscribe to every live camera at startup.
 
 ## Connect the OBS PC once
 

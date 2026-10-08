@@ -19,13 +19,17 @@
       <button class="nav" data-view="settings"><span>⚙</span>Settings</button>
       <button class="nav" data-view="help"><span>?</span>Troubleshooting</button>
     </nav>
+    <div class="local-live-control">
+      <label for="localLiveViews"><input id="localLiveViews" type="checkbox" checked aria-describedby="localLiveHint">Live views on this screen</label>
+      <p id="localLiveHint">Off stops this window's Match Day preview and Replay Studio. A local review will close. The server, cameras, iPad and OBS stay running; scoreboard drafts stay intact.</p>
+    </div>
     <div class="rail-status"><i id="serverDot"></i><span id="serverText">Starting local server…</span></div>
   </aside>
 
   <main>
-    <section class="view framed active" id="view-match-day"><header class="frame-head"><div><p class="kicker">PRODUCTION DESK</p><h1>Match Day</h1></div><a href="/match-day" target="_blank" rel="noopener">Open in browser ↗</a></header><iframe id="matchDayFrame" src="/match-day" title="Match Day production controls" allow="autoplay"></iframe></section>
+    <section class="view framed active" id="view-match-day"><header class="frame-head"><div><p class="kicker">PRODUCTION DESK</p><h1>Match Day</h1></div><a href="/match-day" target="_blank" rel="noopener">Open in browser ↗</a></header><iframe id="matchDayFrame" data-live-src="/match-day" title="Match Day production controls" allow="autoplay"></iframe><div class="local-live-paused" hidden><h2>Local live views are off</h2><p>The Studio server is still running. Use your iPad for Match Day, or turn live views back on in the sidebar.</p></div></section>
     <section class="view" id="view-home">
-      <header class="page-head"><div><p class="kicker">MATCH CONTROL</p><h1>Your ground, in one place.</h1><p class="lede">Run cameras, reviews and broadcast graphics from this PC. Phones and tablets only need a browser.</p></div><span class="version">Studio 1.5.0 · Overlay 0.7.1</span></header>
+      <header class="page-head"><div><p class="kicker">MATCH CONTROL</p><h1>Your ground, in one place.</h1><p class="lede">Run cameras, reviews and broadcast graphics from this PC. Phones and tablets only need a browser.</p></div><span class="version">Studio 1.5.1 · Overlay 0.7.2</span></header>
       <div class="hero-grid">
         <button class="launch-card replay" data-view="replay"><span class="number">01</span><div><p>DECISION REVIEW</p><h2>Replay Studio</h2><span>Connect field cameras, review incidents and inspect synchronized angles.</span></div><b>Open →</b></button>
         <button class="launch-card score" data-view="scoreboard"><span class="number">02</span><div><p>LIVE GRAPHICS</p><h2>Scoreboard</h2><span>Receive Play-Cricket scores or operate the overlay manually.</span></div><b>Open →</b></button>
@@ -38,8 +42,8 @@
       <section class="connect-panel"><div><p class="kicker">QUICK CONNECT</p><h2>Bring a camera onto the field</h2><p>Open one of these links on an iPhone, iPad, Android device or Raspberry Pi connected to this Wi-Fi.</p></div><div id="cameraLinks" class="links"></div></section>
     </section>
 
-    <section class="view framed" id="view-replay"><header class="frame-head"><div><p class="kicker">BACKYARD DRS 0.15.2</p><h1>Replay Studio</h1></div><a href="/umpire" target="_blank">Open in browser ↗</a></header><iframe src="/umpire" title="Replay Studio"></iframe></section>
-    <section class="view framed" id="view-scoreboard"><header class="frame-head"><div><p class="kicker">BROADCAST DESK · OVERLAY 0.7.1</p><h1>Scoreboard</h1></div><nav class="score-shortcuts" aria-label="Broadcast shortcuts"><button type="button" data-score-section="graphicsOnAir">Graphics</button><button type="button" data-score-section="wicketDetails">Wicket details</button><button type="button" data-score-section="statsEditor">Edit stats</button><button type="button" data-score-section="broadcastBranding">Broadcast logo</button><a href="/broadcast" target="_blank">Open broadcast ↗</a></nav></header><iframe id="scoreboardFrame" src="/scoreboard?build=__STUDIO_BUILD__" title="Scoreboard controls"></iframe></section>
+    <section class="view framed" id="view-replay"><header class="frame-head"><div><p class="kicker">BACKYARD DRS 0.15.2</p><h1>Replay Studio</h1></div><a href="/umpire" target="_blank">Open in browser ↗</a></header><iframe id="replayFrame" data-live-src="/umpire" title="Replay Studio"></iframe><div class="local-live-paused" hidden><h2>Local live views are off</h2><p>Cameras and the iPad umpire console remain connected to Studio. Turn live views back on to review footage on this screen.</p></div></section>
+    <section class="view framed" id="view-scoreboard"><header class="frame-head"><div><p class="kicker">BROADCAST DESK · OVERLAY 0.7.2</p><h1>Scoreboard</h1></div><nav class="score-shortcuts" aria-label="Broadcast shortcuts"><button type="button" data-score-section="graphicsOnAir">Graphics</button><button type="button" data-score-section="wicketDetails">Wicket details</button><button type="button" data-score-section="statsEditor">Edit stats</button><button type="button" data-score-section="broadcastBranding">Broadcast logo</button><a href="/broadcast" target="_blank">Open broadcast ↗</a></nav></header><iframe id="scoreboardFrame" src="/scoreboard?build=__STUDIO_BUILD__" title="Scoreboard controls"></iframe></section>
 
     <section class="view content" id="view-settings">
       <header class="page-head"><div><p class="kicker">SETTINGS</p><h1>Connections & output</h1></div></header>

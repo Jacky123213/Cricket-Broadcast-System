@@ -2,7 +2,19 @@
 const views=[...document.querySelectorAll('.view')];
 const byId=id=>document.getElementById(id);
 const serverDot=byId('serverDot'),serverText=byId('serverText'),cameraCount=byId('cameraCount'),scoreCount=byId('scoreCount'),secureState=byId('secureState'),overlayUrl=byId('overlayUrl'),diagServer=byId('diagServer'),diagBluetooth=byId('diagBluetooth'),diagSleep=byId('diagSleep'),copyOverlay=byId('copyOverlay');
-function show(name){views.forEach(view=>view.classList.toggle('active',view.id===`view-${name}`));document.querySelectorAll('.nav').forEach(button=>button.classList.toggle('active',button.dataset.view===name));history.replaceState(null,'',`#${name}`);}
+const localLiveSwitch=byId('localLiveViews'),liveFrames=[...document.querySelectorAll('iframe[data-live-src]')];
+let localLiveEnabled=true;
+try{localLiveEnabled=localStorage.getItem('cricket.local-live-views.v1')!=='off';}catch{/* Storage restrictions never prevent local control. */}
+function localLiveViews(){
+  localLiveSwitch.checked=localLiveEnabled;
+  for(const frame of liveFrames){
+    const view=frame.closest('.view');frame.hidden=!localLiveEnabled;view.querySelector('.local-live-paused').hidden=localLiveEnabled;
+    if(!localLiveEnabled){if(frame.getAttribute('src')&&frame.getAttribute('src')!=='about:blank')frame.src='about:blank';}
+    else if(view.classList.contains('active')&&frame.getAttribute('src')!==frame.dataset.liveSrc)frame.src=frame.dataset.liveSrc;
+  }
+}
+localLiveSwitch.addEventListener('change',()=>{localLiveEnabled=localLiveSwitch.checked;try{localStorage.setItem('cricket.local-live-views.v1',localLiveEnabled?'on':'off');}catch{}localLiveViews();});
+function show(name){if(!views.some(view=>view.id===`view-${name}`))name='match-day';views.forEach(view=>view.classList.toggle('active',view.id===`view-${name}`));document.querySelectorAll('.nav').forEach(button=>button.classList.toggle('active',button.dataset.view===name));history.replaceState(null,'',`#${name}`);localLiveViews();}
 document.querySelectorAll('[data-view]').forEach(item=>item.addEventListener('click',event=>{event.preventDefault();show(item.dataset.view);}));
 document.querySelectorAll('[data-score-section]').forEach(button=>button.addEventListener('click',()=>{show('scoreboard');const frame=byId('scoreboardFrame').contentWindow;frame.CricketSections?.open(button.dataset.scoreSection);frame.location.hash=button.dataset.scoreSection;frame.document.getElementById(button.dataset.scoreSection)?.scrollIntoView({block:'start'});}));
 show(location.hash.slice(1)||'match-day');

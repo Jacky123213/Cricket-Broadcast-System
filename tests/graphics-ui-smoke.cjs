@@ -97,7 +97,7 @@ const graphics={active:{kind:'wicket_card',innings:0,reason:'Manual',until:null}
  assert.equal(program.window.document.getElementById('scorebar').hidden,true,'no current-time graphics during initial camera buffer');
  pw.dispatchEvent(new pw.MessageEvent('message',{source:pw.parent,origin:'http://local',data:{type:'broadcast-time',at:95}}));
  polls.shift()();await wait();await wait();
- assert.ok(calls.includes('/api/scoreboard/program-state?at=95'));assert.equal(pw.document.getElementById('total').textContent,'1–10');
+ assert.ok(calls.includes('/api/scoreboard/program-state?at=95'));assert.equal(calls.length,2,'one request per delayed overlay poll, not live state plus delayed state');assert.equal(pw.document.getElementById('total').textContent,'1–10');
  pw.dispatchEvent(new pw.MessageEvent('message',{source:pw.parent,origin:'http://untrusted',data:{type:'broadcast-time',at:96}}));
  polls.shift()();await wait();assert.equal(calls.at(-1),'/api/scoreboard/program-state?at=95','foreign pages cannot change playout time');
  program.window.close();

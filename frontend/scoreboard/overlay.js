@@ -45,9 +45,10 @@ function render(s){
  if(window.parent!==window)window.parent.postMessage({type:'broadcast-graphics-status',kind:!d.visible?'hidden':s.graphics?.active?.kind||'scorebar',surge:!$('powerSurge').hidden},location.origin);
 }
 async function poll(){try{
- const live=await fetch('/api/state',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!live.ok)throw Error();const state=await live.json();
- if(programMode){
-  if(playoutAt===null){state.score.visible=false;render(state);return;}
-  const r=await fetch('/api/scoreboard/program-state?at='+encodeURIComponent(playoutAt),{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error();render(await r.json());
- }else render(state);
+ // Delayed program state already contains the whole overlay snapshot. Fetching
+ // live state as well doubled these requests on every iPad/OBS output.
+ const url=programMode&&playoutAt!==null?'/api/scoreboard/program-state?at='+encodeURIComponent(playoutAt):'/api/state';
+ const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!response.ok)throw Error();const state=await response.json();
+ if(programMode&&playoutAt===null)state.score.visible=false;
+ render(state);
 }catch{$('connection').hidden=false;$('connection').textContent='SCORE SERVER OFFLINE';}finally{setTimeout(poll,500);}}poll();

@@ -119,4 +119,5 @@
     }catch(e){document.getElementById('bufferStatus').textContent=e.message;}
   }
  bufferStatus();setInterval(bufferStatus,3000);
+ window.addEventListener('beforeunload',()=>{generation++;playing=false;for(const v of views.values())v.player.destroy();if(review)fetch('/api/replays/'+review.id,{method:'DELETE',keepalive:true}).catch(()=>{});review=null;});
 })();

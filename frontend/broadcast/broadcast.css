@@ -2,5 +2,6 @@
 :root [hidden]{display:none!important}#empty{padding:24px}#empty span{max-width:650px;line-height:1.5}#controls{max-width:calc(100% - 28px);flex-wrap:wrap;justify-content:center;opacity:.7}#controls select{max-width:260px}#status{overflow-wrap:anywhere}
 #sound{font-size:11px;color:#ccc}#audioNotice{position:fixed;z-index:5;top:14px;right:14px;max-width:calc(100% - 28px);background:#222e}
 .program-video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+#bufferedStage{position:absolute;inset:0;isolation:isolate}
 #broadcastLogo{position:absolute;z-index:2;top:2vh;right:2vw;width:8vw;height:auto;max-height:25vh;object-fit:contain;object-position:top right;pointer-events:none}
 #replayBadge{position:absolute;top:3vh;left:3vw;z-index:3;background:#111d;border-left:3px solid #f0ad4e;color:#fff;padding:8px 12px;font-size:clamp(10px,1.1vw,20px);font-weight:800;letter-spacing:.12em}

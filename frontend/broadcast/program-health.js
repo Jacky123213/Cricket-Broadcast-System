@@ -19,20 +19,21 @@
     }
   }
   class AudioMeter {
-    constructor(){this.context=null;this.nodes=new Map();this.outputMuted=true;this.state='unavailable';}
+    constructor(){this.context=null;this.nodes=new Map();this.activeVideo=null;this.outputMuted=true;this.state='unavailable';}
     async start(videos){
       const Context=root.AudioContext||root.webkitAudioContext;
       if(!Context)return false;
-      try{if(!this.context)this.context=new Context();for(const video of videos){if(this.nodes.has(video))continue;const source=this.context.createMediaElementSource(video),analyser=this.context.createAnalyser(),gain=this.context.createGain();analyser.fftSize=1024;gain.gain.value=this.outputMuted?0:1;source.connect(analyser);analyser.connect(gain);gain.connect(this.context.destination);this.nodes.set(video,{source,analyser,gain,data:new Float32Array(analyser.fftSize)});}await this.context.resume();this.state=this.context.state==='running'?'active':'suspended';return this.state==='active';}catch{this.state='unavailable';return false;}
+      try{if(!this.context)this.context=new Context();for(const video of videos){if(this.nodes.has(video))continue;const source=this.context.createMediaElementSource(video),analyser=this.context.createAnalyser(),gain=this.context.createGain();analyser.fftSize=1024;gain.gain.value=this.outputMuted||this.activeVideo!==video?0:1;source.connect(analyser);analyser.connect(gain);gain.connect(this.context.destination);this.nodes.set(video,{source,analyser,gain,data:new Float32Array(analyser.fftSize)});}await this.context.resume();this.state=this.context.state==='running'?'active':'suspended';return this.state==='active';}catch{this.state='unavailable';return false;}
     }
-    mute(muted){this.outputMuted=muted;for(const n of this.nodes.values())n.gain.gain.value=muted?0:1;}
+    select(video){this.activeVideo=video;this.mute(this.outputMuted);}
+    mute(muted){this.outputMuted=muted;for(const [video,n] of this.nodes)n.gain.gain.value=muted||this.activeVideo!==video?0:1;}
     sample(video,hasAudio){
       if(!hasAudio)return {meter_state:'no_audio',meter_dbfs:null};
       const n=this.nodes.get(video);if(!this.context||!n)return {meter_state:this.state,meter_dbfs:null};
       if(this.context.state!=='running')return {meter_state:'suspended',meter_dbfs:null};
       try{n.analyser.getFloatTimeDomainData(n.data);const rms=Math.sqrt(n.data.reduce((s,v)=>s+v*v,0)/n.data.length);return {meter_state:'active',meter_dbfs:Math.max(-120,Math.min(0,20*Math.log10(Math.max(1e-6,rms))))};}catch{return {meter_state:'unavailable',meter_dbfs:null};}
     }
-    reset(){for(const n of this.nodes.values()){n.source.disconnect();n.analyser.disconnect();n.gain.disconnect();}this.nodes.clear();}
+    reset(){for(const n of this.nodes.values()){n.source.disconnect();n.analyser.disconnect();n.gain.disconnect();}this.nodes.clear();this.activeVideo=null;}
     close(){this.reset();this.context?.close().catch(()=>{});this.context=null;}
   }
   const api={PlaybackHealth,AudioMeter,intervals};if(typeof module!=='undefined')module.exports=api;else root.DRSProgramHealth=api;

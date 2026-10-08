@@ -1,6 +1,6 @@
 # Cricket Broadcast System
 
-Current release: **1.5.0** · Scoreboard graphics **0.7.1** · DRS engine **0.15.2**.
+Current release: **1.5.1** · Scoreboard graphics **0.7.2** · DRS engine **0.15.2**.
 
 Backyard Cricket Studio combines **Backyard DRS Replay Studio 0.15.2** and **Backyard Scoreboard 0.2** into one local Windows application.
 
@@ -9,6 +9,7 @@ The PC runs a native desktop window with Replay Studio, Scoreboard, Settings and
 ## Features
 
 - Match Day production desk: silent preview, shared camera cuts/live/replay controls, graphics and actual output health, with setup/corrections/troubleshooting separate.
+- **Live views on this screen** toggle in the sidebar: stop the PC window's Match Day and Replay Studio while the server, mobile controls and OBS continue. The preference is browser-local; scoreboard drafts are preserved. Turning it off closes that window's detailed replay.
 - Browser-specific decoded playback/audio telemetry: actual delay, coverage/headroom, frame/late/decode/request counters, score age and displayed graphics; stale/unavailable readings are clearly labelled.
 - Multi-camera WebRTC wall and synchronized rolling replay inherited from DRS 0.15.2.
 - Play-Cricket Scorer Generic (Enhanced) Bluetooth receiver and manual broadcast overlay from Scoreboard 0.2.
@@ -72,7 +73,7 @@ Runtime data, certificates, logs, local environments and replay buffers are excl
 
 No licence is provided at present. Public availability does not grant an open-source licence; a licence can be added later.
 
-See [RELEASE_1_5_0.md](RELEASE_1_5_0.md) for this release's changes and upgrade instructions.
+See [RELEASE_1_5_1.md](RELEASE_1_5_1.md) for this release's changes and upgrade instructions.
 
 ## Broadcast graphics
 

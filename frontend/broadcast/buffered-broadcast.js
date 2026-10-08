@@ -23,7 +23,7 @@
           }
         };
         mount.append(video);return video;
-      },message=>{if(!this.closed&&message&&this.buffering)callbacks.onStatus(message);},{continuous:true});
+      },message=>{if(!this.closed&&message&&this.buffering)callbacks.onStatus(message);},{continuous:true,onActive:video=>callbacks.onVideo?.(video)});
       this.poll();this.tickTimer=setInterval(()=>this.tick(),100);
     }
     now(){return this.anchor?this.anchor.server+performance.now()-this.anchor.local:null;}
