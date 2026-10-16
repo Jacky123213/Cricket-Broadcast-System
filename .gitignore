@@ -17,7 +17,17 @@ storage/
 dist/
 build/
 *.spec
+!packaging/CricketBroadcastSystem.spec
+.build-venv/
+.tools/
+.installer-test/
 .DS_Store
 Thumbs.db
 .test-tmp-*/
 .preview/
+installation.json
+studio-network.json
+client-certificates/
+webview/
+backups/
+import-report.json

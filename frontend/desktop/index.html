@@ -4,13 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111613">
-  <title>Backyard Cricket Studio</title>
+  <title>Cricket Broadcast System</title>
   <link rel="stylesheet" href="/desktop.css?build=__STUDIO_BUILD__">
   <link rel="stylesheet" href="/static/app-theme.css?v=1.3.0">
 </head>
 <body class="app-ui desktop-ui">
   <aside class="rail">
     <a class="wordmark" href="#home" data-view="home" aria-label="Backyard Cricket Studio home"><span>BC</span><strong>Backyard<br>Cricket</strong></a>
+    <div class="studio-connection"><span id="studioMode">Studio</span><strong id="studioName">Connecting…</strong><small id="studioAddress"></small><small>To change studio, close and reopen this app.</small></div>
     <nav aria-label="Application sections">
       <button class="nav active" data-view="match-day"><span>●</span>Match Day</button>
       <button class="nav" data-view="home"><span>⌂</span>Home</button>
@@ -29,7 +30,7 @@
   <main>
     <section class="view framed active" id="view-match-day"><header class="frame-head"><div><p class="kicker">PRODUCTION DESK</p><h1>Match Day</h1></div><a href="/match-day" target="_blank" rel="noopener">Open in browser ↗</a></header><iframe id="matchDayFrame" data-live-src="/match-day" title="Match Day production controls" allow="autoplay"></iframe><div class="local-live-paused" hidden><h2>Local live views are off</h2><p>The Studio server is still running. Use your iPad for Match Day, or turn live views back on in the sidebar.</p></div></section>
     <section class="view" id="view-home">
-      <header class="page-head"><div><p class="kicker">MATCH CONTROL</p><h1>Your ground, in one place.</h1><p class="lede">Run cameras, reviews and broadcast graphics from this PC. Phones and tablets only need a browser.</p></div><span class="version">Studio 1.5.1 · Overlay 0.7.2</span></header>
+      <header class="page-head"><div><p class="kicker">MATCH CONTROL</p><h1>Your ground, in one place.</h1><p class="lede">Run cameras, reviews and broadcast graphics from this PC. Phones and tablets only need a browser.</p></div><span class="version">Studio __APP_VERSION__ · Overlay 0.7.3</span></header>
       <div class="hero-grid">
         <button class="launch-card replay" data-view="replay"><span class="number">01</span><div><p>DECISION REVIEW</p><h2>Replay Studio</h2><span>Connect field cameras, review incidents and inspect synchronized angles.</span></div><b>Open →</b></button>
         <button class="launch-card score" data-view="scoreboard"><span class="number">02</span><div><p>LIVE GRAPHICS</p><h2>Scoreboard</h2><span>Receive Play-Cricket scores or operate the overlay manually.</span></div><b>Open →</b></button>
@@ -43,11 +44,13 @@
     </section>
 
     <section class="view framed" id="view-replay"><header class="frame-head"><div><p class="kicker">BACKYARD DRS 0.15.2</p><h1>Replay Studio</h1></div><a href="/umpire" target="_blank">Open in browser ↗</a></header><iframe id="replayFrame" data-live-src="/umpire" title="Replay Studio"></iframe><div class="local-live-paused" hidden><h2>Local live views are off</h2><p>Cameras and the iPad umpire console remain connected to Studio. Turn live views back on to review footage on this screen.</p></div></section>
-    <section class="view framed" id="view-scoreboard"><header class="frame-head"><div><p class="kicker">BROADCAST DESK · OVERLAY 0.7.2</p><h1>Scoreboard</h1></div><nav class="score-shortcuts" aria-label="Broadcast shortcuts"><button type="button" data-score-section="graphicsOnAir">Graphics</button><button type="button" data-score-section="wicketDetails">Wicket details</button><button type="button" data-score-section="statsEditor">Edit stats</button><button type="button" data-score-section="broadcastBranding">Broadcast logo</button><a href="/broadcast" target="_blank">Open broadcast ↗</a></nav></header><iframe id="scoreboardFrame" src="/scoreboard?build=__STUDIO_BUILD__" title="Scoreboard controls"></iframe></section>
+    <section class="view framed" id="view-scoreboard"><header class="frame-head"><div><p class="kicker">BROADCAST DESK · OVERLAY 0.7.3</p><h1>Scoreboard</h1></div><nav class="score-shortcuts" aria-label="Broadcast shortcuts"><button type="button" data-score-section="graphicsOnAir">Graphics</button><button type="button" data-score-section="wicketDetails">Wicket details</button><button type="button" data-score-section="statsEditor">Edit stats</button><button type="button" data-score-section="broadcastBranding">Broadcast logo</button><a href="/broadcast" target="_blank">Open broadcast ↗</a></nav></header><iframe id="scoreboardFrame" src="/scoreboard?build=__STUDIO_BUILD__" title="Scoreboard controls"></iframe></section>
 
     <section class="view content" id="view-settings">
       <header class="page-head"><div><p class="kicker">SETTINGS</p><h1>Connections & output</h1></div></header>
       <div class="settings-grid">
+        <article id="studioNetwork"><h2>Connect another installed PC</h2><p id="studioNetworkHint">Only the host PC can approve new installed PCs. Existing iPad, camera and OBS links stay unchanged.</p><div id="studioNetworkControls" hidden><label for="studioHostName">Studio / PC name</label><input id="studioHostName" maxlength="80"><label><input id="studioAllowJoin" type="checkbox"> Allow new installed PCs to connect</label><button id="studioSaveNetwork">Save connection settings</button><p>Give the code below to the other PC's operator. Each code approves one PC and expires after 20 minutes. Turning this off stops new approvals, not already-approved PCs.</p><code id="studioPairCode">Connections off</code><button id="studioNewCode">New code</button><p>Export the <a href="/local-ca.crt" download>public CA certificate</a> to the other PC. Compare this SHA-256 fingerprint before approving Windows trust:</p><code id="studioCAFingerprint"></code><h3>Approved PCs</h3><div id="studioClients"></div><p id="studioDiscovery"></p></div><p id="studioNetworkStatus" role="status"></p><p>Use trusted Private networks only. These approvals apply to installed-PC sessions; the existing browser URLs still use trusted-LAN access. View-only / operator roles are not implemented.</p></article>
+        <article><h2>Installation & saved files</h2><p>The installed app keeps matches, logos, certificates and logs outside its program folder. Updates and uninstalling the program do not delete them.</p><p>Close and reopen the app to choose <strong>Host a studio</strong> or <strong>Connect to a studio</strong>. Connect mode runs no server or Bluetooth receiver on this PC. Use <strong>Setup & connections</strong> in the Start menu for the chooser; select Host for imports and certificate repairs.</p><p>Browser/iPad downloads use that device's download settings. Native desktop downloads use your selected folder.</p></article>
         <article><h2>Mobile umpire</h2><p>Use the umpire page from an iPad or another computer on the same network.</p><div id="umpireLinks" class="links"></div></article>
         <article><h2>Broadcast output · another OBS PC</h2><p>Use the Studio PC's LAN address on the same Wi-Fi or Ethernet. HTTPS and certificate are shared with the umpire pages. Browser Source: Local file off, 1920 × 1080.</p><label for="overlayAddress">Studio network address</label><select id="overlayAddress"><option>Finding addresses…</option></select><a id="broadcastLink" href="/broadcast" target="_blank">Open camera + overlay output ↗</a><code id="overlayUrl">Loading…</code><button id="copyOverlay">Copy overlay URL</button><p><a id="overlayCertificate" href="/local-ca.crt" download>Download existing local CA certificate</a></p><p>Trust the public CA certificate on the OBS PC under the Windows user running OBS, then restart OBS. Never copy the private key files.</p></article>
         <article><h2>Camera compatibility</h2><p>Camera pages now list the actual lenses reported by Safari, Chrome and Chromium after permission is granted. Start at 720p / 30 FPS.</p><a href="/camera" target="_blank">Open local camera page ↗</a></article>
@@ -64,6 +67,6 @@
       <details><summary>Overlay and DRS together</summary><p>The same umpire camera can remain connected to DRS while its live view is used for production. Add the scoreboard overlay above that video source in OBS. DRS recording and overlay graphics share this server but remain separate layers.</p></details>
     </section>
   </main>
-  <script src="/static/sections.js?v=1.3.0"></script><script src="/desktop.js?build=__STUDIO_BUILD__"></script>
+  <script id="studioConnection" type="application/json">__STUDIO_CONNECTION__</script><script src="/static/sections.js?v=1.3.0"></script><script src="/desktop.js?build=__STUDIO_BUILD__"></script>
 </body>
 </html>

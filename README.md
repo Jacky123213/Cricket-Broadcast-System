@@ -1,6 +1,15 @@
 # Cricket Broadcast System
 
-Current release: **1.5.1** · Scoreboard graphics **0.7.2** · DRS engine **0.15.2**.
+> **Windows installer prerelease: 1.6.0-rc.3** — Python is bundled; users do not
+> install Python or run pip. Includes Host/Connect modes and graphics fixes.
+> Download `CricketBroadcastSystem-Setup.exe` from the
+> [prerelease](https://github.com/Jacky123213/Cricket-Broadcast-System/releases/tag/v1.6.0-rc.3).
+> Start with [INSTALLER_README.md](INSTALLER_README.md) and the
+> [test checklist](INSTALLER_TEST_CHECKLIST.md). Unsigned test build; stable
+> v1.5.1 remains available. A clean Windows 10/no-Python installation was reported
+> working; full match-day/hardware testing is still needed.
+
+Current prerelease: **1.6.0-rc.3** · Scoreboard graphics **0.7.3** · DRS engine **0.15.2**.
 
 Backyard Cricket Studio combines **Backyard DRS Replay Studio 0.15.2** and **Backyard Scoreboard 0.2** into one local Windows application.
 
@@ -8,6 +17,7 @@ The PC runs a native desktop window with Replay Studio, Scoreboard, Settings and
 
 ## Features
 
+- Host your studio on one PC, or connect another installed PC without running a second server/Bluetooth receiver. Nearby discovery, manual LAN address entry, explicit public-CA trust and host connection codes are included.
 - Match Day production desk: silent preview, shared camera cuts/live/replay controls, graphics and actual output health, with setup/corrections/troubleshooting separate.
 - **Live views on this screen** toggle in the sidebar: stop the PC window's Match Day and Replay Studio while the server, mobile controls and OBS continue. The preference is browser-local; scoreboard drafts are preserved. Turning it off closes that window's detailed replay.
 - Browser-specific decoded playback/audio telemetry: actual delay, coverage/headroom, frame/late/decode/request counters, score age and displayed graphics; stale/unavailable readings are clearly labelled.
@@ -32,6 +42,13 @@ The PC runs a native desktop window with Replay Studio, Scoreboard, Settings and
 - Recorded innings history and a statistics editor for details missing from the Bluetooth feed.
 
 ## Windows install
+
+Download and run `CricketBroadcastSystem-Setup.exe` from the prerelease above.
+Choose **Host a studio** on the camera/scoring PC or **Connect to a studio** on
+another Windows PC. See the installer guide for certificate/connection setup.
+The installer preserves saved match data and certificates on upgrades/uninstall.
+
+### Run from source (developers)
 
 1. Install 64-bit Python 3.11 or newer, including the `py` launcher.
 2. Run `SETUP_WINDOWS.bat` once while online.

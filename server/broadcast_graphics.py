@@ -645,7 +645,9 @@ class BroadcastGraphics:
             if chosen['kind'] == 'boundaries': self.last_boundary_strip = now
             self.next_strip_at = now + self.config["interval_seconds"]
         active = copy.deepcopy(self.active)
-        if active and active['kind'] == 'bowling_card': active['innings'] = len(self.innings)-1
+        # Team cards are always the live/current innings; the history selector
+        # belongs to charts/break graphics, not a different team's player card.
+        if active and active['kind'] in ('batting_card', 'bowling_card'): active['innings'] = len(self.innings)-1
         return {"config": copy.deepcopy(self.config), "phase": self.phase,
                 "innings": [self.stats(i) for i in self.innings], "target": self.target() if len(self.innings) > 1 else None,
                 "result": result, "active": active, "strip": self.strip.copy(),

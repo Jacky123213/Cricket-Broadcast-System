@@ -90,16 +90,18 @@ def load_certificate(path: Path) -> x509.Certificate:
         return x509.load_pem_x509_certificate(data)
 
 
-def load_or_create_ca() -> tuple[rsa.RSAPrivateKey, x509.Certificate]:
-    if CA_KEY.exists():
-        key = serialization.load_pem_private_key(CA_KEY.read_bytes(), password=None)
+def load_or_create_ca(cert_dir: Path | None = None) -> tuple[rsa.RSAPrivateKey, x509.Certificate]:
+    ca_key_path = cert_dir / "rootCA.key.pem" if cert_dir else CA_KEY
+    ca_cert_path = cert_dir / "rootCA.crt" if cert_dir else CA_CERT
+    if ca_key_path.exists():
+        key = serialization.load_pem_private_key(ca_key_path.read_bytes(), password=None)
     else:
         key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
 
     certificate: x509.Certificate | None = None
-    if CA_CERT.exists():
+    if ca_cert_path.exists():
         try:
-            candidate = load_certificate(CA_CERT)
+            candidate = load_certificate(ca_cert_path)
             same_key = candidate.public_key().public_bytes(
                 serialization.Encoding.DER,
                 serialization.PublicFormat.SubjectPublicKeyInfo,
@@ -114,7 +116,7 @@ def load_or_create_ca() -> tuple[rsa.RSAPrivateKey, x509.Certificate]:
     if certificate is None:
         certificate = create_ca_certificate(key)
 
-    CA_KEY.write_bytes(
+    ca_key_path.write_bytes(
         key.private_bytes(
             serialization.Encoding.PEM,
             serialization.PrivateFormat.PKCS8,
@@ -122,16 +124,18 @@ def load_or_create_ca() -> tuple[rsa.RSAPrivateKey, x509.Certificate]:
         )
     )
     # DER is accepted consistently by Windows, Android, and iOS certificate UIs.
-    CA_CERT.write_bytes(certificate.public_bytes(serialization.Encoding.DER))
+    ca_cert_path.write_bytes(certificate.public_bytes(serialization.Encoding.DER))
     return key, certificate
 
 
-def reuse_existing_ca() -> tuple[rsa.RSAPrivateKey, x509.Certificate]:
+def reuse_existing_ca(cert_dir: Path | None = None) -> tuple[rsa.RSAPrivateKey, x509.Certificate]:
     """Refresh a server certificate without changing an already trusted CA."""
-    if not CA_KEY.exists() or not CA_CERT.exists():
+    ca_key_path = cert_dir / "rootCA.key.pem" if cert_dir else CA_KEY
+    ca_cert_path = cert_dir / "rootCA.crt" if cert_dir else CA_CERT
+    if not ca_key_path.exists() or not ca_cert_path.exists():
         raise RuntimeError("Existing CA certificate/key missing. Run initial setup first.")
-    key = serialization.load_pem_private_key(CA_KEY.read_bytes(), password=None)
-    certificate = load_certificate(CA_CERT)
+    key = serialization.load_pem_private_key(ca_key_path.read_bytes(), password=None)
+    certificate = load_certificate(ca_cert_path)
     if certificate.public_key().public_bytes(
         serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
     ) != public_key_bytes(key):
@@ -143,14 +147,15 @@ def reuse_existing_ca() -> tuple[rsa.RSAPrivateKey, x509.Certificate]:
     return key, certificate
 
 
-def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Generate the local Studio HTTPS certificate.")
-    parser.add_argument("--reuse-ca", action="store_true", help="Keep the existing CA and server key unchanged.")
-    args = parser.parse_args(argv)
-    CERTS.mkdir(parents=True, exist_ok=True)
-    ca_key, ca_certificate = reuse_existing_ca() if args.reuse_ca else load_or_create_ca()
-    server_key = (serialization.load_pem_private_key(SERVER_KEY.read_bytes(), password=None)
-                  if args.reuse_ca and SERVER_KEY.exists()
+def generate_certificates(cert_dir: Path | None = None, *, reuse_ca: bool = False) -> None:
+    folder = cert_dir if cert_dir else CERTS
+    ca_cert_path = folder / "rootCA.crt" if cert_dir else CA_CERT
+    server_key_path = folder / "server.key.pem" if cert_dir else SERVER_KEY
+    server_cert_path = folder / "server.crt" if cert_dir else SERVER_CERT
+    folder.mkdir(parents=True, exist_ok=True)
+    ca_key, ca_certificate = reuse_existing_ca(cert_dir) if reuse_ca else load_or_create_ca(cert_dir)
+    server_key = (serialization.load_pem_private_key(server_key_path.read_bytes(), password=None)
+                  if reuse_ca and server_key_path.exists()
                   else rsa.generate_private_key(public_exponent=65537, key_size=2048))
     hostname = socket.gethostname()
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, hostname)])
@@ -195,23 +200,31 @@ def main(argv: list[str] | None = None) -> None:
         .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
         .sign(ca_key, hashes.SHA256())
     )
-    if not args.reuse_ca or not SERVER_KEY.exists():
-        SERVER_KEY.write_bytes(
+    if not reuse_ca or not server_key_path.exists():
+        server_key_path.write_bytes(
             server_key.private_bytes(
                 serialization.Encoding.PEM,
                 serialization.PrivateFormat.PKCS8,
                 serialization.NoEncryption(),
             )
         )
-    if args.reuse_ca and SERVER_CERT.exists():
+    if reuse_ca and server_cert_path.exists():
         # The old public server certificate is recoverable; private keys stay unchanged.
-        SERVER_CERT.with_suffix(".crt.previous").write_bytes(SERVER_CERT.read_bytes())
-    SERVER_CERT.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
+        server_cert_path.with_suffix(".crt.previous").write_bytes(server_cert_path.read_bytes())
+    server_cert_path.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
     print("Created local HTTPS certificate for:")
     for item in alternatives:
         print(f"  {item.value}")
-    print(f"Local CA certificate: {CA_CERT}")
+    print(f"Local CA certificate: {ca_cert_path}")
     print(f"Certificate authority: {ca_certificate.subject.rfc4514_string()}")
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Generate the local Studio HTTPS certificate.")
+    parser.add_argument("--reuse-ca", action="store_true", help="Keep the existing CA and server key unchanged.")
+    parser.add_argument("--cert-dir", type=Path, help="Explicit persistent certificate folder.")
+    args = parser.parse_args(argv)
+    generate_certificates(args.cert_dir, reuse_ca=args.reuse_ca)
 
 
 if __name__ == "__main__":

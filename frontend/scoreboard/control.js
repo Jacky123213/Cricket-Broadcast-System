@@ -58,7 +58,7 @@ broadcast.onsubmit=async event=>{event.preventDefault();const data={};for(const 
   try{await post('/api/scoreboard/broadcast/settings',data);await post('/api/scoreboard/settings',{banner:$('mainBanner').value});$('broadcastSave').textContent='Saved';error('');}catch(e){error(e.message);}
 };
 async function action(data){try{await post('/api/scoreboard/broadcast/action',data);if(data.action==='start_chase'){initialized=false;statsLoaded=false;}error('');}catch(e){error(e.message);}}
-document.querySelectorAll('[data-graphic]').forEach(button=>button.onclick=()=>action({action:'show',kind:button.dataset.graphic,innings:button.dataset.graphic==='bowling_card'?Math.max(0,(latest?.graphics.innings.length||1)-1):Number($('graphicInnings').value)}));
+document.querySelectorAll('[data-graphic]').forEach(button=>button.onclick=()=>action({action:'show',kind:button.dataset.graphic,innings:['batting_card','bowling_card'].includes(button.dataset.graphic)?Math.max(0,(latest?.graphics.innings.length||1)-1):Number($('graphicInnings').value)}));
 document.querySelectorAll('[data-action]').forEach(button=>button.onclick=()=>action({action:button.dataset.action}));
 $('hideGraphic').onclick=()=>action({action:'hide'});
 $('powerSurgeToggle').onclick=()=>action(latest?.graphics.power_surge?{action:'power_surge_off'}:{action:'show',kind:'power_surge',innings:Math.max(0,(latest?.graphics.innings.length||1)-1)});
