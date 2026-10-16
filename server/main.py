@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import mimetypes
 import math
 import threading
@@ -10,7 +11,7 @@ from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -26,6 +27,7 @@ from .scoreboard_state import State as ScoreboardState
 from .bluetooth_receiver import start_receiver
 from .build_info import APP_VERSION, SCOREBOARD_VERSION, UI_BUILD_ID
 from .broadcast_desk import BroadcastDesk
+from .studio_network import StudioNetwork, ApprovedClientMiddleware, COOKIE, JOIN_PAGE
 
 
 mimetypes.init()
@@ -41,11 +43,12 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
     manager = DeviceManager(database)
     calibration = Calibration(settings.database_path)
     replay = ReplayStore(settings.database_path.parent / "buffer" / "milestone4")
-    scoreboard = scoreboard or ScoreboardState(PROJECT_ROOT / "data")
+    scoreboard = scoreboard or ScoreboardState(settings.scoreboard_path)
     bluetooth_stop = threading.Event()
     bluetooth_thread: threading.Thread | None = None
 
     sleep_guard = SleepGuard()
+    studio = StudioNetwork(settings)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -71,6 +74,7 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         bluetooth_thread.start()
         monitor_task = asyncio.create_task(monitor_connections())
         try:
+            studio.start()
             yield
         finally:
             await asyncio.to_thread(scoreboard.flush)
@@ -78,6 +82,7 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
             if bluetooth_thread:
                 await asyncio.to_thread(bluetooth_thread.join, 5)
             sleep_guard.stop()
+            await asyncio.to_thread(studio.close)
             monitor_task.cancel()
             with suppress(asyncio.CancelledError):
                 await monitor_task
@@ -99,6 +104,9 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
     app.state.scoreboard = scoreboard
     app.state.broadcast_desk = desk
     app.state.replay_store = replay
+    app.state.studio_network = studio
+    app.include_router(studio.router())
+    app.add_middleware(ApprovedClientMiddleware, studio=studio)
 
     @app.middleware("http")
     async def fresh_ui(request, call_next):
@@ -146,9 +154,16 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         }
 
     @app.get("/", include_in_schema=False)
-    async def index() -> HTMLResponse:
+    async def index(request: Request) -> HTMLResponse:
         page = (FRONTEND / "desktop" / "index.html").read_text(encoding="utf-8")
-        return HTMLResponse(page.replace("__STUDIO_BUILD__", UI_BUILD_ID))
+        connection = {"name": studio.state["name"], "client": bool(request.cookies.get(COOKIE)),
+                      "local_operator": bool(request.client and request.client.host in ("127.0.0.1", "::1", "testclient") and not request.cookies.get(COOKIE))}
+        return HTMLResponse(page.replace("__STUDIO_BUILD__", UI_BUILD_ID).replace("__APP_VERSION__", APP_VERSION)
+                            .replace("__STUDIO_CONNECTION__", json.dumps(connection).replace("<", "\\u003c")))
+
+    @app.get("/studio/join", include_in_schema=False)
+    async def studio_join() -> HTMLResponse:
+        return HTMLResponse(JOIN_PAGE, headers={"Referrer-Policy": "no-referrer"})
 
     @app.get("/desktop.css", include_in_schema=False)
     async def desktop_css() -> FileResponse:
@@ -328,6 +343,7 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
             "certificate_url": info["certificate_url"],
             "secure_context": info["secure_context"],
             "sleep_prevention": info["sleep_prevention"],
+            "studio_name": studio.state["name"],
         }
 
     @app.get('/api/camera-qr')
@@ -346,7 +362,7 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
 
     @app.get("/local-ca.crt", include_in_schema=False)
     async def local_ca_certificate() -> FileResponse:
-        certificate = PROJECT_ROOT / "certs" / "rootCA.crt"
+        certificate = settings.certificate_dir / "rootCA.crt"
         if not certificate.exists():
             raise HTTPException(status_code=404, detail="Local certificate has not been generated")
         return FileResponse(

@@ -1,0 +1,37 @@
+Cricket Broadcast System 1.6.0-rc.3 — clean-PC test build
+
+This installer includes Python and the application's Python dependencies.
+No separate Python installation or pip commands are needed.
+
+Windows 10 (1809+) / Windows 11, x64. ARM64 is not a native build target yet.
+
+The application installs for your Windows user. It does not replace your old
+.bat installation. Close the old app before using this version: both normally
+use port 8765.
+
+Each launch offers Host a studio or Connect to a studio. Connect controls another
+PC on your trusted network without running a second local server or Bluetooth
+receiver. New PCs need a code from host Settings and the host's public CA;
+certificate trust requires explicit approval. Private keys stay on the host.
+
+When hosting, choose fresh setup or explicitly import an old app folder.
+Import copies recognised match data, team/logo settings and certificates with
+a backup. Existing recordings remain in their original locations.
+
+Saved files: %LOCALAPPDATA%\CricketBroadcastSystem
+Program files: %LOCALAPPDATA%\Programs\CricketBroadcastSystem
+
+Upgrades and uninstalling preserve saved data and certificates. Uninstalling
+does not remove the shared WebView2 Runtime or your trusted local CA.
+
+If WebView2 is missing, the installer will ask for approval before installing
+it from Microsoft. First-run setup separately asks approval to trust this
+installation's local CA for your Windows user only.
+
+Phones/tablets and another OBS PC still need the public CA installed/trusted.
+Private certificate keys must never be published or copied to camera devices.
+Allow Windows Firewall access only on a trusted Private network. This app is
+for trusted local networks, not direct public-internet hosting.
+
+This test build is unsigned. Do not bypass a security warning blindly; only
+test the file provided directly from your own build folder.
