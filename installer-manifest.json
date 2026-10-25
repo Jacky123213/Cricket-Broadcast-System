@@ -1,0 +1,11 @@
+{
+  "version": "1.7.0-rc.2",
+  "windows_file_version": "1.7.0.2",
+  "artifact": "CricketBroadcastSystem-Setup.exe",
+  "bytes": 56548216,
+  "sha256": "FC9ED4F11F545BBBD35A7DD01DF585E396B121260E1C146135940C268808ED59",
+  "archive_kind": "installer_only",
+  "exact_application_source_available": false,
+  "rebuilt_for_publication": false,
+  "application_license_added": false
+}
