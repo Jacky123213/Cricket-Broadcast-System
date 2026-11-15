@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import mimetypes
 import math
+import logging
 import threading
 from html import escape
 import time
@@ -10,7 +12,7 @@ from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -26,6 +28,8 @@ from .scoreboard_state import State as ScoreboardState
 from .bluetooth_receiver import start_receiver
 from .build_info import APP_VERSION, SCOREBOARD_VERSION, UI_BUILD_ID
 from .broadcast_desk import BroadcastDesk
+from .studio_network import StudioNetwork, ApprovedClientMiddleware, COOKIE, JOIN_PAGE
+from .live_match import LiveMatch
 
 
 mimetypes.init()
@@ -41,11 +45,12 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
     manager = DeviceManager(database)
     calibration = Calibration(settings.database_path)
     replay = ReplayStore(settings.database_path.parent / "buffer" / "milestone4")
-    scoreboard = scoreboard or ScoreboardState(PROJECT_ROOT / "data")
+    scoreboard = scoreboard or ScoreboardState(settings.scoreboard_path)
     bluetooth_stop = threading.Event()
     bluetooth_thread: threading.Thread | None = None
 
     sleep_guard = SleepGuard()
+    studio = StudioNetwork(settings)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -55,6 +60,7 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         replay.initialise()
         async def monitor_connections() -> None:
             while True:
+                await manager.request_heartbeats()
                 await asyncio.sleep(settings.heartbeat_interval_seconds)
                 await manager.disconnect_stale(settings.device_timeout_seconds)
                 async with replay.lock:
@@ -70,7 +76,15 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         )
         bluetooth_thread.start()
         monitor_task = asyncio.create_task(monitor_connections())
+        async def monitor_match():
+            while True:
+                try: await live.tick()
+                except Exception:
+                    logging.getLogger(__name__).exception('Live match/highlight worker needs attention')
+                await asyncio.sleep(1)
+        live_task=asyncio.create_task(monitor_match())
         try:
+            studio.start()
             yield
         finally:
             await asyncio.to_thread(scoreboard.flush)
@@ -78,9 +92,12 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
             if bluetooth_thread:
                 await asyncio.to_thread(bluetooth_thread.join, 5)
             sleep_guard.stop()
+            await asyncio.to_thread(studio.close)
             monitor_task.cancel()
+            live_task.cancel()
             with suppress(asyncio.CancelledError):
                 await monitor_task
+            with suppress(asyncio.CancelledError): await live_task
 
     app = FastAPI(
         title=settings.app_name,
@@ -90,8 +107,13 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         redoc_url=None,
     )
     app.include_router(replay.router())
-    desk = BroadcastDesk(replay, manager)
+    desk = BroadcastDesk(replay, manager, lambda:scoreboard.snapshot()['score']['color1'])
+    live=LiveMatch(settings,scoreboard,replay,desk)
+    app.state.live_match=live
+    app.include_router(live.router())
     app.include_router(desk.router())
+    app.include_router(desk.review.router())
+    app.include_router(scoreboard.packs.router())
     app.include_router(calibration.router())
     app.state.settings = settings
     app.state.database = database
@@ -99,6 +121,9 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
     app.state.scoreboard = scoreboard
     app.state.broadcast_desk = desk
     app.state.replay_store = replay
+    app.state.studio_network = studio
+    app.include_router(studio.router())
+    app.add_middleware(ApprovedClientMiddleware, studio=studio)
 
     @app.middleware("http")
     async def fresh_ui(request, call_next):
@@ -110,6 +135,7 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         return response
 
     app.mount("/static", StaticFiles(directory=FRONTEND / "assets"), name="static")
+    app.mount('/operator-assets', StaticFiles(directory=FRONTEND/'operator'), name='operator-assets')
     app.mount('/broadcast-assets', StaticFiles(directory=FRONTEND/'broadcast'), name='broadcast-assets')
     app.mount(
         "/scoreboard-assets",
@@ -146,9 +172,16 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         }
 
     @app.get("/", include_in_schema=False)
-    async def index() -> HTMLResponse:
+    async def index(request: Request) -> HTMLResponse:
         page = (FRONTEND / "desktop" / "index.html").read_text(encoding="utf-8")
-        return HTMLResponse(page.replace("__STUDIO_BUILD__", UI_BUILD_ID))
+        connection = {"name": studio.state["name"], "client": bool(request.cookies.get(COOKIE)),
+                      "local_operator": bool(request.client and request.client.host in ("127.0.0.1", "::1", "testclient") and not request.cookies.get(COOKIE))}
+        return HTMLResponse(page.replace("__STUDIO_BUILD__", UI_BUILD_ID).replace("__APP_VERSION__", APP_VERSION)
+                            .replace("__STUDIO_CONNECTION__", json.dumps(connection).replace("<", "\\u003c")))
+
+    @app.get("/studio/join", include_in_schema=False)
+    async def studio_join() -> HTMLResponse:
+        return HTMLResponse(JOIN_PAGE, headers={"Referrer-Policy": "no-referrer"})
 
     @app.get("/desktop.css", include_in_schema=False)
     async def desktop_css() -> FileResponse:
@@ -163,8 +196,20 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         return FileResponse(FRONTEND / "desktop" / "hardware.html")
 
     @app.get("/broadcast", include_in_schema=False)
-    async def broadcast_output() -> FileResponse:
+    async def broadcast_output(request:Request):
+        if 'follow' not in request.query_params and 'camera' not in request.query_params:
+            from urllib.parse import urlencode
+            return RedirectResponse('/broadcast?'+urlencode({**dict(request.query_params),'follow':'1'}))
         return FileResponse(FRONTEND / "broadcast" / "index.html")
+
+    @app.get('/live',include_in_schema=False)
+    @app.get('/ball-by-ball',include_in_schema=False)
+    async def live_page(): return FileResponse(FRONTEND/'live'/'index.html')
+
+    app.mount('/live-assets',StaticFiles(directory=FRONTEND/'live'),name='live-assets')
+
+    @app.get('/cameras',include_in_schema=False)
+    async def cameras_page(): return FileResponse(FRONTEND/'camera'/'slots.html')
 
     @app.get('/match-day', include_in_schema=False)
     async def match_day():
@@ -187,6 +232,10 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
             f'<pre>{content}</pre></body></html>')
 
     app.mount('/match-day-assets', StaticFiles(directory=FRONTEND / 'match-day'), name='match-day-assets')
+
+    @app.get('/review-preview', include_in_schema=False)
+    async def review_preview():
+        return FileResponse(FRONTEND / 'broadcast' / 'review-preview.html')
 
     @app.get("/broadcast.css", include_in_schema=False)
     async def broadcast_css() -> FileResponse:
@@ -212,9 +261,39 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         page = (FRONTEND / "umpire" / "index.html").read_text(encoding="utf-8")
         return HTMLResponse(page.replace("<!-- CAMERA_URLS -->", links))
 
+    def operator_page(section: str, request: Request) -> HTMLResponse:
+        page = (FRONTEND/'operator'/'index.html').read_text('utf-8')
+        connection = {"name": studio.state["name"], "client": bool(request.cookies.get(COOKIE)),
+                      "local_operator": bool(request.client and request.client.host in ("127.0.0.1", "::1", "testclient") and not request.cookies.get(COOKIE))}
+        return HTMLResponse(page.replace('__SECTION__', section).replace('__STUDIO_BUILD__', UI_BUILD_ID)
+                            .replace('__STUDIO_CONNECTION__', json.dumps(connection).replace('<', '\\u003c')))
+
+    @app.get('/match-setup', include_in_schema=False)
+    @app.get('/teams', include_in_schema=False)
+    @app.get('/graphics', include_in_schema=False)
+    @app.get('/highlights', include_in_schema=False)
+    @app.get('/connections', include_in_schema=False)
+    @app.get('/settings', include_in_schema=False)
+    @app.get('/help', include_in_schema=False)
+    async def workspace_page(request: Request):
+        return operator_page(request.url.path.lstrip('/'), request)
+
     @app.get("/scoreboard", include_in_schema=False)
-    async def scoreboard_page() -> FileResponse:
-        return FileResponse(SCOREBOARD_FRONTEND / "control.html")
+    async def scoreboard_page(request: Request):
+        if request.query_params.get('legacy') == '1':
+            return FileResponse(SCOREBOARD_FRONTEND / "control.html")
+        return operator_page('scoreboard', request)
+
+    @app.get('/api/teams')
+    async def teams_library():
+        return await asyncio.to_thread(scoreboard.team_library)
+
+    @app.post('/api/teams')
+    async def save_team(profile: dict[str, Any]):
+        try:
+            return await asyncio.to_thread(scoreboard.save_team, profile)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     @app.get("/overlay", include_in_schema=False)
     async def scoreboard_overlay() -> FileResponse:
@@ -328,6 +407,7 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
             "certificate_url": info["certificate_url"],
             "secure_context": info["secure_context"],
             "sleep_prevention": info["sleep_prevention"],
+            "studio_name": studio.state["name"],
         }
 
     @app.get('/api/camera-qr')
@@ -346,7 +426,7 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
 
     @app.get("/local-ca.crt", include_in_schema=False)
     async def local_ca_certificate() -> FileResponse:
-        certificate = PROJECT_ROOT / "certs" / "rootCA.crt"
+        certificate = settings.certificate_dir / "rootCA.crt"
         if not certificate.exists():
             raise HTTPException(status_code=404, detail="Local certificate has not been generated")
         return FileResponse(

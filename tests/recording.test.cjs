@@ -66,3 +66,13 @@ test('recording bitrate scales with capture and stays bounded',async()=>{
   r.clock.sync=async()=>{r.clock.checked=100000;r.clock.uncertainty=2;};await r.start();assert.equal(options.videoBitsPerSecond,expected);r.stop();
  }
 });
+
+test('silent Firefox recording requests VP8 only; Opus is requested only for a real audio track',async()=>{
+ for(const audio of [false,true]){const c=context(async()=>({ok:true}));let options;
+  class Recorder{static isTypeSupported(mime){return mime.startsWith('video/webm');}constructor(s,o){options=o;}start(){this.state='recording';}stop(){this.state='inactive';}}
+  c.MediaRecorder=Recorder;c.window.MediaRecorder=Recorder;
+  const r=new c.window.DRSRecorder('p',{getVideoTracks:()=>[{getSettings:()=>({frameRate:30})}],getAudioTracks:()=>audio?[{readyState:'live',enabled:true}]:[]},()=>{});
+  r.clock.sync=async()=>{r.clock.checked=100000;r.clock.uncertainty=2;};await r.start();
+  assert.equal(options.mimeType,audio?'video/webm;codecs=vp8,opus':'video/webm;codecs=vp8');r.stop();
+ }
+});

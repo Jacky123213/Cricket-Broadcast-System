@@ -8,7 +8,10 @@ function desk(path='frontend/scoreboard/control.html',url='http://local/scoreboa
 (async()=>{
   const dom=desk(),w=dom.window,d=w.document;
   w.eval(script);w.CricketSections.init();
-  assert.equal(d.querySelectorAll('.section-toggle').length,11);
+  assert.equal(d.querySelectorAll('.section-toggle').length,14);
+  assert.ok(d.querySelector('#graphicsPacks .section-toggle'));
+  assert.ok(d.querySelector('#foxPackContent .section-toggle'));
+  assert.ok(d.querySelector('#liveCentreSettings .section-toggle'));
   const team=d.getElementById('matchSettings'),button=team.querySelector('.section-toggle'),runs=d.querySelector('[name="runs"]');
   runs.value='101';button.click();
   assert.equal(button.type,'button');assert.equal(button.getAttribute('aria-expanded'),'false');

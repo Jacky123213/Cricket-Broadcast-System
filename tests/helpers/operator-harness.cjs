@@ -1,0 +1,21 @@
+const {JSDOM}=require('jsdom'),fs=require('node:fs'),path=require('node:path');
+const read=p=>fs.readFileSync(path.join(__dirname,'../..',p),'utf8');
+const settle=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r));};
+async function harness(page,identity={name:'Test studio',client:false,local_operator:true}){
+ const dom=new JSDOM(read('frontend/operator/index.html').replaceAll('__SECTION__',page),{url:'https://studio.test/'+page,runScripts:'outside-only'}),w=dom.window,d=w.document,requests=[],timers=[];
+ d.getElementById('studioConnection').textContent=JSON.stringify(identity);
+ w.structuredClone=structuredClone;w.AbortSignal.timeout=()=>undefined;w.setTimeout=(fn,delay)=>{timers.push({fn,delay});return timers.length;};w.confirm=()=>true;
+ const row={team:'HOME',opposition:'AWAY',runs:94,wickets:4,overs:'14.1',run_rate:6.64,batters:[],bowlers:[],chart:[],fours_manual:null,sixes_manual:null,extras_manual:null};
+ const score={team1:'HOME',team2:'AWAY',color1:'#0088cc',color2:'#ff8800',logo1:'',logo2:'',runs:'94',wickets:'4',overs:'14.1',source:'bluetooth',visible:true,banner:'',striker:'1',batter1_name:'Player one',batter1_runs:'44',batter1_balls:'30',batter2_name:'Player two',batter2_runs:'12',batter2_balls:'10',bowler:'Bowler',bowler_figures:'2–24',bowler_overs:'3.0',deliveries:'0 1 4'};
+ const config={pack:'bbl',event_animations:true,auto_break_highlights:false,total_overs:20,wickets_limit:10,target:null,powerplay_overs:4,power_surge_starts:{},match_title:'Test match',venue:'Oval',rotation_mode:'mixed',interval_seconds:10,graphic_seconds:25,auto_wicket:true,auto_drinks:true,auto_innings_break:true,auto_summary:true,messages:[]};
+ const details={career_label:'ODI CAREER',coming_title:'',coming_subtitle:'',coming_image:'',toss_team:'HOME',toss_choice:'bat',sponsor_name:'Club',sponsor_caption:'',sponsor_image:''};
+ const state={score,status:'Connected',packet_count:10,last_score:100,server_time:102,logs:[],graphics:{match_id:'a'.repeat(32),config,phase:'live',innings:[row],presentation:{details,teams:[{team:'HOME',featured:'',players:[{name:'One',role:'batter',captain:false,photo:''}]}],lineups:[]},active:null,result:'',power_surge:false},branding:{logo:'',visible:true,width_percent:8,margin_percent:2}};
+ const live={match_id:'a'.repeat(32),config:{format:'Backyard cricket',competition:'',match_date:'',clips_enabled:false,stream_enabled:false,duck_enabled:true,save_fours:true,save_sixes:true,save_wickets:true,save_other_runs:false,save_extras:false,save_dots:false,before_seconds:8,after_seconds:5,archive_limit_mb:512},highlights:[],innings:[row]};
+ const app={version:'1.10.0-rc.1',scoreboard_version:'0.10.0',drs_version:'0.15.2',studio_name:'Test studio',secure_context:true,connected_cameras:0,sleep_prevention:'Active'};
+ const studio={name:'Test studio',allow_join:true,code:'ABCD1234',code_seconds:1000,ca_sha256:'FP',discovery:'Ready',clients:[{id:'approved',name:'OBS PC'}]};
+ w.fetch=async(url,options)=>{requests.push({url,options});let data;if(options?.body){const body=JSON.parse(options.body);if(url==='/api/scoreboard/settings')Object.assign(score,body);if(url==='/api/scoreboard/broadcast/settings')Object.assign(config,body);if(url==='/api/graphics-packs'&&body.details)Object.assign(details,body.details);}
+  if(url==='/api/scoreboard/state')data=state;else if(url==='/api/live/state')data=live;else if(url==='/api/teams')data=[{name:'HOME',color:score.color1,logo:''},{name:'AWAY',color:score.color2,logo:''}];else if(url==='/api/app-status')data=app;else if(url==='/api/live/settings')data={...live.config,archive_count:0,archive_bytes:0,status:'Off'};else if(url==='/api/server-info')data={addresses:['https://192.168.1.68:8765']};else if(url.startsWith('/api/studio-network/'))data=studio;else if(url==='/api/broadcast/health')data={clients:[]};else if(url==='/api/buffer')data={cameras:{}};else data={ok:true};return{ok:true,status:200,json:async()=>structuredClone(data)};};
+ w.eval(read('frontend/assets/preferences.js'));w.eval(read('frontend/assets/operator-nav.js'));w.eval(read('frontend/operator/workspace.js'));await settle();
+ return{dom,w,d,requests,timers,state,score,live,app,studio,settle,submit:id=>{d.getElementById(id).dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));},close:()=>w.close()};
+}
+module.exports={harness,read,settle};

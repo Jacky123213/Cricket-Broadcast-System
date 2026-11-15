@@ -38,6 +38,15 @@ const graphics={active:{kind:'wicket_card',innings:0,reason:'Manual',until:null}
  assert.equal(d.querySelector('.graphic-heading h1').textContent,'Pavilion','bowling card follows the current opposition even when held across an innings change');
  assert.equal(d.getElementById('statGraphic').style.getPropertyValue('--graphic-team'),'#14b8a6');
  assert.equal(d.querySelector('.graphic-heading img').getAttribute('src'),'/pavilion.png');
+ const chaseBatting={...chaseBowling,active:{kind:'batting_card',innings:0,reason:'Manual',until:null},innings:[innings,{...chaseBowling.innings[1],logo:'/creek.png',batters:[{name:'Chasing batter',runs:20,balls:9,active:true,dismissal:'not out'}]}]};
+ w.BackyardGraphics.render(chaseBatting,{visible:true});
+ assert.equal(d.querySelector('.graphic-heading h1').textContent,'Creek','batting card follows the current batting team, not the first-innings selector');
+ assert.match(d.querySelector('.graphic-heading p').textContent,/SECOND INNINGS/);
+ assert.equal(d.querySelector('.graphic-heading img').getAttribute('src'),'/creek.png');
+ assert.equal(d.getElementById('statGraphic').style.getPropertyValue('--graphic-team'),'#f6b342');
+ assert.equal(d.querySelector('.batting-card .player-name').textContent,'Chasing batter');
+ w.BackyardGraphics.render(chaseBowling,{visible:true});
+ assert.equal(d.querySelector('.graphic-heading h1').textContent,'Pavilion','switching to bowling keeps the same innings but changes team identity');
  const chartView={...graphics,active:{kind:'run_chart',innings:0,reason:'Manual',until:null},config:{...graphics.config,powerplay_overs:4}};
  w.BackyardGraphics.render(chartView,{visible:true});assert.equal(d.querySelector('.powerplay-label').textContent,'POWER PLAY');
  assert.equal(d.querySelectorAll('rect[fill="url(#powerplayFill)"]').length,4);assert.equal(d.querySelectorAll('rect[fill="var(--graphic-team)"]').length,5);
@@ -87,6 +96,8 @@ const graphics={active:{kind:'wicket_card',innings:0,reason:'Manual',until:null}
  graphics.innings.push({...innings,team:'Creek',opposition:'Pavilion'});
  dd.getElementById('graphicInnings').value='0';
  dd.querySelector('[data-graphic="bowling_card"]').click();await wait();assert.equal(posts.at(-1).data.kind,'bowling_card');assert.equal(posts.at(-1).data.innings,1);
+ dd.querySelector('[data-graphic="batting_card"]').click();await wait();assert.equal(posts.at(-1).data.kind,'batting_card');assert.equal(posts.at(-1).data.innings,1);
+ dd.querySelector('[data-graphic="run_chart"]').click();await wait();assert.equal(posts.at(-1).data.innings,0,'chart retains historical innings selection');
  assert.equal(dd.querySelector('[data-action="reopen"]').textContent,'Undo match finish');
  desk.window.close();
 

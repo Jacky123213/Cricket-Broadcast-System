@@ -9,16 +9,21 @@ import copy
 import math
 import random
 import re
+import uuid
+from .match_events import record_deliveries, deliveries
 
 
 DEFAULT_CONFIG = {
+    "pack": "bbl", "event_animations": True, "auto_break_highlights": False,
     "total_overs": 20, "wickets_limit": 10, "target": None,
     "rotation_mode": "mixed", "interval_seconds": 10, "graphic_seconds": 25,
     "auto_drinks": True, "auto_innings_break": True, "auto_summary": True, "auto_wicket": True,
     "match_title": "BACKYARD CRICKET", "venue": "", "messages": [],
     "result_override": "", "powerplay_overs": 0, "power_surge_starts": {},
 }
-KINDS = {"run_chart", "batting_card", "bowling_card", "innings_break", "match_summary", "wicket_card", "power_surge"}
+KINDS = {"run_chart", "batting_card", "bowling_card", "innings_break", "match_summary", "wicket_card", "power_surge",
+         "lineup", "player_batting", "player_bowling", "coming_up", "toss", "sponsor", "win"}
+PREMATCH_KINDS = {"lineup", "player_batting", "player_bowling", "coming_up", "toss", "sponsor"}
 
 
 def integer(value):
@@ -38,7 +43,7 @@ def validate_config(changes):
     if not isinstance(changes, dict) or set(changes) - set(DEFAULT_CONFIG):
         raise ValueError("Unknown broadcast setting")
     for key, value in changes.items():
-        if key in ("auto_drinks", "auto_innings_break", "auto_summary", "auto_wicket"):
+        if key in ("auto_drinks", "auto_innings_break", "auto_summary", "auto_wicket", "event_animations", "auto_break_highlights"):
             if type(value) is not bool: raise ValueError(f"{key} must be true or false")
         elif key in ("total_overs", "wickets_limit", "interval_seconds", "graphic_seconds", "powerplay_overs"):
             limits = {"total_overs": (1, 100), "wickets_limit": (1, 10),
@@ -54,6 +59,8 @@ def validate_config(changes):
                 raise ValueError("Select a Power Surge start for the first or second innings")
             if any(type(start) is not int or not 0 <= start <= 100 for start in value.values()):
                 raise ValueError("Power Surge first over must be a whole number between 1 and 100, or 0 for off")
+        elif key == "pack":
+            if value not in ('bbl', 'fox_odi'): raise ValueError('Choose BBL or FOX ODI')
         elif key == "rotation_mode":
             if value not in ("mixed", "automatic", "manual"): raise ValueError("Invalid strip mode")
         elif key == "messages":
@@ -95,6 +102,7 @@ def new_innings(score):
 class BroadcastGraphics:
     def __init__(self, saved=None):
         self.config = copy.deepcopy(DEFAULT_CONFIG)
+        self.match_id = saved.get('match_id',uuid.uuid4().hex) if saved else uuid.uuid4().hex
         self.innings = []
         self.phase = "live"
         self.finished_at = None
@@ -108,7 +116,9 @@ class BroadcastGraphics:
         self.next_strip_at = 0
         self.priority = None
         self.last_boundary_strip = -math.inf
-        self.dirty = False
+        # Persist the new identity when upgrading an existing saved match, even
+        # if no further delivery is scored before a highlight is saved.
+        self.dirty = bool(saved and not saved.get('match_id'))
         self.random = random.Random()
         if saved:
             validate_config(saved.get("config", {}))
@@ -120,7 +130,7 @@ class BroadcastGraphics:
             self.summary_shown = saved.get("summary_shown", False)
 
     def export(self):
-        return {"config": self.config, "innings": self.innings, "phase": self.phase,
+        return {"match_id":self.match_id,"config": self.config, "innings": self.innings, "phase": self.phase,
                 "finished_at": self.finished_at, "summary_shown": self.summary_shown}
 
     def configure(self, changes):
@@ -128,6 +138,8 @@ class BroadcastGraphics:
         proposed = {**self.config, **copy.deepcopy(changes)}
         validate_surge_ranges(proposed)
         self.config = proposed
+        if self.config['pack']=='bbl' and self.active and self.active['kind'] in PREMATCH_KINDS|{'win'}:
+            self.active = None
         self.next_strip_at = 0
         self.dirty = True
 
@@ -186,6 +198,7 @@ class BroadcastGraphics:
                 self._players(current, score, self.previous, now)
                 if score['deliveries'].strip():
                     current['over_tokens'][str(max(0, (b-1)//6) if b and b%6==0 else b//6)] = score['deliveries'].split()
+                record_deliveries(current,score,self.previous,now)
                 self.previous = copy.deepcopy(score)
                 self.dirty = True
                 return
@@ -224,6 +237,8 @@ class BroadcastGraphics:
         current["samples"][str(b)] = runs
         if b % 6:
             current['over_tokens'][str(b // 6)] = score['deliveries'].split()
+        elif b == 0:
+            current['over_tokens']['0'] = score['deliveries'].split()
         if old_w is not None and wickets > old_w:
             current['partnership_runs'] = current['partnership_balls'] = None
             for number in range(old_w + 1, wickets + 1):
@@ -231,6 +246,7 @@ class BroadcastGraphics:
                 current["wicket_events"].append({"balls": b, "runs": runs, "number": number, "at": now,
                                                "delivery_runs": delivery_runs})
         self._players(current, score, previous, now)
+        record_deliveries(current,score,previous,now)
         # Boundaries remain in normal rotation, never interrupt every scoring shot.
         halfway = self.config["total_overs"] * 3
         if old_b is not None and old_b < halfway <= b and not current["drinks_shown"]:
@@ -391,20 +407,24 @@ class BroadcastGraphics:
         if margin == 0: return "Match tied"
         return f"{first['team']} wins by {margin} {'run' if margin == 1 else 'runs'}"
 
-    def show(self, kind, now, reason="Manual", innings=None):
+    def show(self, kind, now, reason="Manual", innings=None, team='', player=''):
         if kind not in KINDS: raise ValueError("Unknown graphic")
         index = len(self.innings) - 1 if innings is None else innings
-        if type(index) is not int or index < 0 or index >= len(self.innings): raise ValueError("No innings statistics available yet")
+        if kind not in PREMATCH_KINDS and (type(index) is not int or index < 0 or index >= len(self.innings)): raise ValueError("No innings statistics available yet")
+        if kind in PREMATCH_KINDS|{'win'} and self.config['pack']!='fox_odi': raise ValueError('Choose the FOX ODI preset for this graphic')
+        if kind=='win' and not self.result(): raise ValueError('Finish the match or enter its result first')
+        if any(not isinstance(v,str) or len(v)>160 for v in (team,player)): raise ValueError('Invalid team or player')
         if kind == 'power_surge': self.power_surge = True; return
         if kind == 'wicket_card' and not self.innings[index]['last_wicket']: raise ValueError('Confirm a last-wicket batter first')
         if reason != 'Manual' and self.active and self.active.get('until') is None: return
         self.active = {"kind": kind, "innings": index, "reason": reason,
                        "until": None if reason == 'Manual' else now + self.config["graphic_seconds"]}
+        if kind in PREMATCH_KINDS: self.active.update(team=team, player=player)
 
     def action(self, command, score, now):
         self.flush(now, force=True)
         kind = command.get("action")
-        if kind == "show": self.show(command.get("kind"), now, innings=command.get("innings"))
+        if kind == "show": self.show(command.get("kind"), now, innings=command.get("innings"), team=command.get('team',''), player=command.get('player',''))
         elif kind == "hide": self.active = None
         elif kind == 'power_surge_off': self.power_surge = False
         elif kind == 'wicket_details':
@@ -442,11 +462,11 @@ class BroadcastGraphics:
             if key not in changes: continue
             rows = changes[key]
             if not isinstance(rows, list) or len(rows) > 15: raise ValueError("Use at most 15 player rows")
-            allowed = {"name", "runs", "balls", "dismissal", "dots", "fours", "sixes"} if key == "batters" else {"name", "figures", "overs"}
+            allowed = {"name", "runs", "balls", "dismissal", "dots", "fours", "sixes"} if key == "batters" else {"name", "figures", "overs", "maidens"}
             cleaned = []
             for row in rows:
                 if not isinstance(row, dict) or set(row) - allowed: raise ValueError("Invalid player row")
-                numeric = {'runs','balls','dots','fours','sixes'}
+                numeric = {'runs','balls','dots','fours','sixes','maidens'}
                 item = {k: row.get(k, None if k in numeric else '') for k in allowed}
                 for k, v in item.items():
                     if k in numeric:
@@ -518,13 +538,19 @@ class BroadcastGraphics:
             elif complete and (key == 'dots' or all(s['boundary'] is not None for s in shots.values())):
                 result[key] = sum(s['runs'] == 0 if key == 'dots' else s['boundary'] == (4 if key == 'fours' else 6) for s in shots.values())
             else: result[key] = None
+            # Zero is provable even when older delivery detail is unavailable.
+            if key in ('fours','sixes') and row.get('runs') is not None and row['runs'] < (4 if key=='fours' else 6) and result[key] is None:
+                result[key]=0
         result['scoring_shots'] = row['balls'] - result['dots'] if row.get('balls') is not None and result['dots'] is not None else None
         result['strike_rate'] = round(row['runs'] * 100 / row['balls']) if row.get('balls') and row.get('runs') is not None else None
         result.pop('shots', None)
         return result
 
-    def stats(self, current):
-        out = copy.deepcopy(current)
+    def stats(self, current, include_history=False):
+        out = {k:copy.deepcopy(v) for k,v in current.items() if k!='delivery_history'}
+        if include_history:
+            out['deliveries']=deliveries(current)
+            out['worm']=[{'balls':int(b),'runs':r} for b,r in sorted(current['samples'].items(),key=lambda kv:int(kv[0]))]
         b = current["balls"]
         out["overs"] = overs(b)
         out["run_rate"] = round(current["runs"] * 6 / b, 2) if b and current["runs"] is not None else None
@@ -645,8 +671,26 @@ class BroadcastGraphics:
             if chosen['kind'] == 'boundaries': self.last_boundary_strip = now
             self.next_strip_at = now + self.config["interval_seconds"]
         active = copy.deepcopy(self.active)
-        if active and active['kind'] == 'bowling_card': active['innings'] = len(self.innings)-1
-        return {"config": copy.deepcopy(self.config), "phase": self.phase,
+        # Team cards are always the live/current innings; the history selector
+        # belongs to charts/break graphics, not a different team's player card.
+        if active and active['kind'] in ('batting_card', 'bowling_card'): active['innings'] = len(self.innings)-1
+        duck=None
+        if self.innings:
+            current=self.innings[-1]; row=current.get('last_wicket')
+            if row and row.get('runs')==0 and not row.get('active') and row.get('out_number'):
+                event=next((e for e in reversed(current['wicket_events']) if e['number']==row['out_number']),None)
+                confirmed=current.get('feed_wicket',{}).get('name')==row['name'] or row.get('dismissal_manual')
+                if event and confirmed: duck={'id':f'{self.match_id}:{len(self.innings)-1}:{row["out_number"]}:{row["name"]}', 'at':event['at'],'name':row['name']}
+        event = None
+        if self.innings and self.phase=='live':
+            timed = [r for r in self.innings[-1].get('delivery_history',{}).values() if r.get('at') is not None]
+            if timed:
+                row = max(timed,key=lambda r:r['at'])
+                event_kind = row['kind'] if row['kind'] in ('four','six','wicket') else 'wide' if re.fullmatch(r'\d*(?:wd|wds)',row['token'],re.I) else None
+                if event_kind:
+                    event = {'id':f'{self.match_id}:{len(self.innings)-1}:{row["id"]}:{row["token"]}',
+                             'kind':event_kind,'at':row['at']}
+        return {"match_id":self.match_id,"duck":duck,"event":event,"config": copy.deepcopy(self.config), "phase": self.phase,
                 "innings": [self.stats(i) for i in self.innings], "target": self.target() if len(self.innings) > 1 else None,
                 "result": result, "active": active, "strip": self.strip.copy(),
                 "power_surge": self.power_surge,

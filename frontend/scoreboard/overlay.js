@@ -2,21 +2,27 @@
 const $=id=>document.getElementById(id);
 const programMode=new URLSearchParams(location.search).get('program')==='1';
 let playoutAt=null;
+let decisionReviewed=false;
 window.addEventListener('message',event=>{
  if(programMode&&event.source===window.parent&&event.origin===location.origin&&event.data?.type==='broadcast-time'&&Number.isFinite(event.data.at))playoutAt=event.data.at;
  if(programMode&&event.source===window.parent&&event.origin===location.origin&&event.data?.type==='broadcast-suspend')playoutAt=null;
+ if(programMode&&event.source===window.parent&&event.origin===location.origin&&event.data?.type==='broadcast-review')decisionReviewed=event.data.active===true;
 });
 function render(s){
  const d=s.score;
- const graphicShown=window.BackyardGraphics?.render(s.graphics,d)||false;
+ window.FoxODI?.apply(s.graphics,d);
+ const graphicShown=decisionReviewed?false:window.BackyardGraphics?.render(s.graphics,d)||false;
+ if(decisionReviewed)for(const id of ['statGraphic','breakGraphic','wicketGraphic','powerSurge'])$(id).hidden=true;
+ window.CricketDuck?.show(s.graphics?.duck,s.server_time,d.visible&&!graphicShown&&!decisionReviewed);
  $('scorebar').hidden=!d.visible||graphicShown;
+ window.FoxEvents?.render(s.graphics,s.server_time,d.visible&&!graphicShown&&!decisionReviewed&&(!s.graphics?.active||s.graphics.active.kind==='wicket_card'));
  document.documentElement.style.setProperty('--team1',d.color1);
  document.documentElement.style.setProperty('--team2',d.color2);
  for(const k of ['team1','team2','overs','batter1_name','batter2_name','batter1_runs','batter2_runs','batter1_balls','batter2_balls','bowler','bowler_figures','bowler_overs'])$(k).textContent=d[k]||'—';
  $('total').textContent=d.runs!==''&&d.wickets!==''?`${d.wickets}–${d.runs}`:'—';
- const banner=s.graphics?.strip.text||d.banner||'BACKYARD CRICKET';
+ const banner=decisionReviewed?'DECISION REVIEWED':s.graphics?.strip.text||d.banner||'BACKYARD CRICKET';
  const bannerText=$('bannerText');
- $('banner').classList.toggle('projection',s.graphics?.strip.kind==='projection');
+ $('banner').classList.toggle('projection',!decisionReviewed&&s.graphics?.strip.kind==='projection');$('banner').classList.toggle('decision-reviewed',decisionReviewed);
  if(bannerText.textContent!==banner){bannerText.textContent=banner;$('banner').classList.remove('changed','long');void $('banner').offsetWidth;$('banner').classList.add('changed');}
  const overflow=bannerText.scrollWidth-$('banner').clientWidth;
  $('banner').classList.toggle('long',overflow>1);
@@ -42,7 +48,7 @@ function render(s){
  const age=s.last_score===null?Infinity:s.server_time-s.last_score;
  $('connection').hidden=!d.visible||graphicShown||s.graphics?.phase==='complete'||s.graphics?.phase==='innings_break'||d.source==='manual'||age<=30;
  $('connection').textContent=s.last_score===null?'WAITING FOR SCORE':'NO SCORE UPDATE · '+Math.floor(age)+'s';
- if(window.parent!==window)window.parent.postMessage({type:'broadcast-graphics-status',kind:!d.visible?'hidden':s.graphics?.active?.kind||'scorebar',surge:!$('powerSurge').hidden},location.origin);
+ if(window.parent!==window)window.parent.postMessage({type:'broadcast-graphics-status',kind:!d.visible?'hidden':decisionReviewed?'scorebar':s.graphics?.active?.kind||'scorebar',surge:!$('powerSurge').hidden},location.origin);
 }
 async function poll(){try{
  // Delayed program state already contains the whole overlay snapshot. Fetching

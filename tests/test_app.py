@@ -26,7 +26,8 @@ def test_pages_and_health(tmp_path: Path) -> None:
         assert 'onsubmit="return false"' in camera_page
         assert 'type="module"' not in camera_page
         assert 'id="cameraDevice"' in camera_page
-        assert "Your ground, in one place" in client.get("/").text
+        assert 'id="desktopRail"' in client.get("/").text
+        assert 'id="view-match-setup"' in client.get("/").text
         assert client.get("/scoreboard").status_code == 200
         assert client.get("/overlay").status_code == 200
         assert client.get("/broadcast").status_code == 200

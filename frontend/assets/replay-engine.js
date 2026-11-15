@@ -18,7 +18,7 @@
   });
  }
  class AnglePlayer{
-  constructor(clips,makeVideo,status=()=>{},options={}){this.clips=clips;this.status=status;this.continuous=Boolean(options.continuous);this.onActive=options.onActive||(()=>{});this.slots=[0,1].map(()=>({video:makeVideo(),clip:null,promise:null}));this.active=null;this.desired=null;this.busy=false;this.closed=false;this.lastCorrection=0;this.failures=new Map();this.muted=true;this.ready=false;this.playing=false;this.waiting=false;this.error=null;}
+  constructor(clips,makeVideo,status=()=>{},options={}){this.clips=clips;this.status=status;this.continuous=Boolean(options.continuous);this.retain=this.continuous||Boolean(options.seamless);this.onActive=options.onActive||(()=>{});this.slots=[0,1].map(()=>({video:makeVideo(),clip:null,promise:null}));this.active=null;this.desired=null;this.busy=false;this.closed=false;this.lastCorrection=0;this.failures=new Map();this.muted=true;this.ready=false;this.playing=false;this.waiting=false;this.error=null;}
   get video(){return this.active?.video||this.slots[0].video;}
   end(slot){return Math.min(slot.clip.end_ms,Number.isFinite(slot.video.duration)?slot.clip.start_ms+slot.video.duration*1000:Infinity);}
   covers(slot,t){return slot?.clip&&slot.clip.start_ms<=t&&t<this.end(slot);}
@@ -26,13 +26,14 @@
    if(slot.clip?.id===clip.id){if(slot.promise)await slot.promise;return;}
    if(slot.promise)await slot.promise.catch(()=>{});
    if(this.closed)return;
-   slot.clip=clip;slot.preparedFor=null;slot.requestedRate=null;slot.video.pause();slot.video.hidden=!this.continuous;if(slot.video.style)slot.video.style.zIndex='0';
+   slot.clip=clip;slot.preparedFor=null;slot.requestedRate=null;slot.video.pause();slot.video.hidden=!this.retain;if(slot.video.style)slot.video.style.zIndex='0';
    // Keep ownership until data is decoded, not just until metadata arrives.
    // Replacing src during this wait cancels Safari's in-flight media request.
    slot.promise=(async()=>{await wait(slot.video,'loadedmetadata',()=>{slot.video.src=clip.url;slot.video.load();});if(slot.video.readyState<2)await wait(slot.video,'loadeddata',()=>{});})();
    try{await slot.promise;}catch(e){slot.clip=null;throw e;}finally{slot.promise=null;}
   }
   async seek(slot,t){if(slot.preparing)await slot.preparing;const seconds=Math.max(0,(t-slot.clip.start_ms)/1000);if(Math.abs(slot.video.currentTime-seconds)>.025)await wait(slot.video,'seeked',()=>{slot.video.currentTime=seconds;});if(slot.video.readyState<2)await wait(slot.video,'loadeddata',()=>{});}
+  async prepare(t){const clip=[...this.clips].reverse().find(c=>c.start_ms<=t&&t<c.end_ms);if(!clip){this.status('No footage at this time');return false;}const slot=this.slots[0];await this.load(slot,clip);if(this.closed)return false;await this.seek(slot,t);if(this.closed)return false;this.active=slot;slot.video.hidden=false;if(slot.video.style)slot.video.style.zIndex='1';this.ready=true;this.onActive(slot.video);this.status('');return true;}
   play(slot){slot.video.muted=this.muted;if(slot.video.paused&&!slot.playPromise){slot.playPromise=slot.video.play().catch(e=>this.status('Tap Play to resume: '+e.message)).finally(()=>{slot.playPromise=null;});}}
   update(t,playing,rate=1,force=false){this.playing=playing;this.desired={t,playing,rate,force:force||this.desired?.force};if(!this.busy)this.pump();}
   async pump(){
@@ -41,7 +42,7 @@
    try{
     if(!this.covers(this.active,t)){
      this.ready=false;this.waiting=true;this.error=null;this.status('Loading next frame…');
-     if(this.active&&!this.continuous)this.active.video.pause();
+     if(this.active&&!this.retain)this.active.video.pause();
      const candidates=[...this.clips].reverse().filter(c=>c.start_ms<=t&&t<c.end_ms&&(this.failures.get(c.id)||0)<Date.now());
      // An overlapping newer clip is not a reason to discard footage already
      // being downloaded and prepared for this boundary.
@@ -62,10 +63,10 @@
         t=this.desired.t;rate=this.desired.rate;this.desired=null;
        }
        if(!this.covers(slot,t))continue;
-       const prepared=this.continuous&&!force&&slot.preparedFor===clip.id&&Math.abs(clip.start_ms+slot.video.currentTime*1000-t)<=250;
+       const prepared=this.retain&&!force&&slot.preparedFor===clip.id&&Math.abs(clip.start_ms+slot.video.currentTime*1000-t)<=250;
        if(!prepared)await this.seek(slot,t);
        if(this.playing&&slot.video.readyState<3)await wait(slot.video,'canplay',()=>{});
-       if(this.continuous&&this.playing&&slot!==this.active)await presented(slot.video);
+       if(this.retain&&this.playing&&slot!==this.active)await presented(slot.video);
        if(this.closed)return;
        chosen=slot;break;
       }catch(e){this.failures.set(clip.id,Date.now()+10000);this.error=e.message;this.status(e.message);}
@@ -75,7 +76,7 @@
     }else if(force){this.waiting=true;this.active.video.pause();await this.seek(this.active,t);}
     if(this.closed)return;
     // A scrub arriving during a network load supersedes this old frame.
-    if(this.desired?.force){this.active.video.hidden=true;return;}
+    if(this.desired?.force){if(!this.retain)this.active.video.hidden=true;return;}
     const v=this.active.video;if(this.playing&&v.readyState<3){this.waiting=true;this.status('Buffering this angle…');await wait(v,'canplay',()=>{});}v.hidden=false;v.muted=this.muted;this.ready=true;
     let wantedRate=rate;
     if(this.playing){

@@ -1,0 +1,89 @@
+/* Preset proportions follow the ODI references; all team accents are data driven. */
+.overlay-body[data-pack=fox_odi]{font-family:Arial,Helvetica,sans-serif}
+[data-pack=fox_odi] .scorebar{left:0;width:100%;bottom:0;min-height:7.3vw;padding:.45vw 1.1vw .5vw;grid-template-columns:26% 47% 19% 8%;background:#23242a;border:0;box-shadow:none;clip-path:none}
+[data-pack=fox_odi] .scorebar:before{display:none}
+[data-pack=fox_odi] .team-block{gap:.7vw;padding:0 1vw 0 0}
+[data-pack=fox_odi] .team-block>div:first-child{width:5.8vw;align-self:stretch;align-content:center}
+[data-pack=fox_odi] .team-block b,[data-pack=fox_odi] .opposition b{font-size:1.45vw;line-height:1;letter-spacing:-.04em;font-weight:900}
+[data-pack=fox_odi] .team-block img,[data-pack=fox_odi] .opposition img{width:4.2vw;height:4.2vw}
+[data-pack=fox_odi] .team-block strong{font-size:4vw;letter-spacing:-.04em;line-height:1}
+[data-pack=fox_odi] .team-block span{font-size:1.3vw;line-height:1.25}
+[data-pack=fox_odi] .team-block .score-target{font-size:.9vw;font-weight:800;line-height:1.15}
+[data-pack=fox_odi] .batters{border:1px solid #ccd0d4;background:#23242a}
+[data-pack=fox_odi] .batter{padding:.35vw .7vw;font-size:1.2vw;line-height:1.1;text-transform:uppercase}
+[data-pack=fox_odi] .batter strong{font-size:1.5vw}
+[data-pack=fox_odi] .striker>b:before{content:''}
+[data-pack=fox_odi] .ticker{font-size:1.15vw;line-height:1.15;margin-top:.7vw;min-height:1.3vw;letter-spacing:0;text-transform:uppercase}
+[data-pack=fox_odi] .ticker.projection{font-size:.95vw}
+[data-pack=fox_odi] .bowling{font-size:1.3vw;line-height:1.05;padding:0 .9vw}
+[data-pack=fox_odi] .bowling>b{text-transform:uppercase}
+[data-pack=fox_odi] .bowling strong{font-size:1.65vw}
+[data-pack=fox_odi] .bowling>div>span{font-size:1.1vw}
+[data-pack=fox_odi] .over-label{display:none}
+[data-pack=fox_odi] .balls{margin-top:.25vw;gap:.18vw;flex-wrap:wrap}
+[data-pack=fox_odi] .balls span{flex-basis:1.65vw;height:1.65vw;line-height:1.5vw;font-size:.9vw;border:1.5px solid #e9ebec;background:transparent;color:#fff}
+[data-pack=fox_odi] .balls .played{font-weight:700}
+[data-pack=fox_odi] .overlay-status{bottom:8vw}
+.fox-panel.stat-graphic{inset:7vh 16vw 7vh;padding:2.1vw 2vw 1.7vw;border:0;box-shadow:none;background:linear-gradient(180deg,#2c3038f5,#1b2028f7);gap:1.2vw;grid-template-rows:auto minmax(0,1fr) auto}
+.fox-panel:before{display:none}
+.fox-heading{display:flex;gap:1.1vw;align-items:center;min-width:0}
+.fox-heading>div{min-width:0}.fox-heading h1{margin:0;color:var(--graphic-team);font:900 3.2vw/1 Arial;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.035em}
+.fox-heading p{margin:.2vw 0 0;font-size:1vw;line-height:1.15;color:#fff;text-transform:uppercase}
+.fox-team-logo{width:5.2vw;height:5.2vw;object-fit:contain;flex-shrink:0}
+.fox-card-body{min-height:0;display:flex;flex-direction:column;gap:1vw;overflow:hidden}
+.fox-table{table-layout:fixed;border-collapse:collapse;width:100%;height:100%;font-size:clamp(8px,min(1.15vw,calc(36vh / var(--rows))),24px);text-transform:uppercase;background:#1b2027}
+.fox-table th{font-size:.68vw;font-weight:500;color:#d0d2da;text-align:right;padding:.35vw .5vw;line-height:1.2}
+.fox-table th:first-child,.fox-table th:nth-child(2){text-align:left}
+.fox-table th:first-child{width:32%}.fox-table th:nth-child(2){width:48%}.fox-table th:nth-child(n+3){width:10%}
+.fox-table td{border-bottom:1px solid #66707b55;padding:.2vw .6vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.1;text-align:right}
+.fox-table td:nth-child(2),.fox-table td:first-child{text-align:left}
+.fox-table td:nth-child(n+3){font-weight:800;font-size:1.15em}
+.fox-table .fox-active,.fox-lineup-row.fox-active{background:var(--graphic-team);color:var(--graphic-ink)}
+.fox-table .fox-active .fox-name:before{content:'▸ ';font-size:.8em}
+.fox-bowling_card .fox-table{height:auto;flex:1}
+.fox-bowling_card .fox-table th:first-child{width:30%}.fox-bowling_card .fox-table th:nth-child(n+2){width:14%;text-align:center}
+.fox-bowling_card .fox-table td:nth-child(n+2){text-align:center;font-weight:800}
+.fox-fow{display:flex;gap:1vw;align-items:end;font-size:.8vw;text-transform:uppercase;min-height:2.3vw}
+.fox-fow>small{margin-right:auto;font-size:.65vw}
+.fox-fow>span{display:grid;text-align:center;gap:.3vw}
+.fox-fow>span small{font-size:.65vw}.fox-fow b{background:var(--graphic-team);color:var(--graphic-ink);padding:.3vw}
+.fox-footer{display:flex;align-items:baseline;justify-content:flex-end;gap:.8vw;font-size:.9vw;min-width:0;color:#d4d7dd;text-transform:uppercase}
+.fox-footer>span:first-child{margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:38%}
+.fox-footer strong{font-size:3.2vw;line-height:1;color:var(--graphic-team);white-space:nowrap}
+.fox-small.break-graphic{bottom:3.4vh;right:3vw;max-width:38vw;padding:.7vw .9vw;background:#1c2027f5;border:0;box-shadow:none;gap:.5vw}
+.fox-mini{display:flex;align-items:center;gap:.6vw;min-width:0}.fox-mini-logo{width:2.8vw;height:2.8vw;object-fit:contain;flex-shrink:0}
+.fox-mini>div{display:grid;min-width:0;text-transform:uppercase}
+.fox-mini small{font-size:.7vw;color:#fff;line-height:1.25}
+.fox-mini strong{font-size:1.55vw;line-height:1.05;color:var(--graphic-team);text-overflow:ellipsis;overflow:hidden;max-width:30vw;white-space:nowrap}
+.fox-mini span{font-size:.9vw;color:var(--graphic-team);line-height:1.2}
+.fox-mini span:empty{display:none}.fox-coming_up{left:40vw;right:auto!important;max-width:54vw!important;align-items:center}
+.fox-coming-image{width:7vw;height:6vw;object-fit:contain}.fox-win .fox-mini strong{font-size:1.1vw;white-space:normal}
+.fox-player.wicket-graphic{bottom:8vw;left:2vw;width:40vw;padding:.6vw .7vw;background:#1e222af5;border:0;box-shadow:none}
+.fox-player-heading{display:flex;align-items:center;gap:.55vw;margin-bottom:.5vw}
+.fox-player-heading>div:first-of-type{min-width:0;flex:1;display:grid;text-transform:uppercase}
+.fox-player-heading strong{font-size:1.35vw;color:var(--graphic-team);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fox-player-heading small{font-size:.7vw;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fox-player-figures{display:flex;gap:.4vw;align-items:baseline;color:var(--graphic-team)}.fox-player-figures b{font-size:2.4vw;line-height:1}.fox-player-figures span{font-size:1.25vw;font-weight:800}
+.fox-player-stats{display:flex;align-items:stretch}.fox-player-stats>div{flex:1;text-align:center;border-right:1px solid #d7d7dc77;display:grid;gap:.12vw;min-width:0;padding:0 .2vw}.fox-player-stats>div:last-child{border:0}.fox-player-stats small{font-size:.62vw;white-space:nowrap}.fox-player-stats b{font-size:1.45vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fox-sponsor.break-graphic{bottom:0;left:0;right:0;max-width:none;padding:.8vw;background:#18224a;justify-content:center;height:7vw}
+.fox-sponsor-content{display:flex;gap:1.5vw;align-items:center}.fox-sponsor-content strong{font-size:1.7vw}.fox-sponsor-content span{font-size:1vw;color:#fff}.fox-sponsor-logo{max-width:20vw;height:4vw;object-fit:contain}
+[data-pack=fox_odi]:has(.fox-sponsor:not([hidden])) .scorebar{bottom:7vw}
+.fox-lineup-body{min-height:0;display:grid;grid-template-columns:1fr 1fr;overflow:hidden;background:#1a1f27;grid-row:2 / 4}
+.fox-lineup-list{min-height:0;display:flex;flex-direction:column;justify-content:space-evenly;padding:.5vw}.fox-lineup-list>small{font-size:.7vw;color:#bec5cd}
+.fox-lineup-row{display:flex;gap:.5vw;padding:.3vw .5vw;font-size:clamp(8px,1.05vw,22px);text-transform:uppercase;min-width:0}.fox-lineup-row>span:first-child{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fox-role{width:3vw;text-align:center;flex-shrink:0}.fox-portrait{width:100%;height:100%;min-height:0;object-fit:contain;object-position:center bottom}.fox-lineup-logo{width:80%;height:80%;object-fit:contain;place-self:center;opacity:.6}
+.fox-summary{display:flex;flex-direction:column;min-height:0;background:#1b2027;overflow:hidden}.fox-summary-innings{flex:1;min-height:0;padding:.6vw .8vw;border-bottom:1px solid #59616a77;display:grid;grid-template-rows:auto minmax(0,1fr);gap:.6vw}
+.fox-summary-innings>header{display:flex;gap:.7vw;min-width:0;align-items:center;color:var(--graphic-team)}.fox-summary-innings h2{font-size:1.7vw;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;text-transform:uppercase}.fox-summary-innings header b{font-size:1.7vw;white-space:nowrap}.fox-summary-innings header>span{margin-left:auto;font-size:.8vw;color:#d8dbe2;white-space:nowrap}
+.fox-leaders{display:grid;grid-template-columns:1fr 1fr;gap:4vw;min-height:0}.fox-leader-list{min-height:0;display:grid;grid-auto-rows:minmax(0,1fr)}
+.fox-leader{display:flex;gap:.5vw;align-items:center;min-height:0;container-type:size;font-size:1.1vw;text-transform:uppercase;line-height:1.1}.fox-leader>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:min(1.1vw,65cqh)}.fox-leader b{font-size:1.5vw;font-size:min(1.5vw,80cqh);flex-shrink:0}.fox-leader small{font-size:.9vw;font-size:min(.9vw,60cqh);flex-shrink:0}.fox-leader-list>p{font-size:.9vw}
+.fox-match_summary .fox-heading h1{color:#fff}.fox-result{background:var(--graphic-team);color:var(--graphic-ink);text-transform:uppercase;text-align:center;padding:.6vw;font-size:1.05vw;font-weight:800}
+.fox-event{position:fixed;left:0;right:0;bottom:0;height:7.3vw;background:#23242a;z-index:15;overflow:hidden;display:grid;place-items:center;pointer-events:none;color:#fff}
+.fox-event-trail{font:900 3.5vw Arial;letter-spacing:.5vw;white-space:nowrap;animation:fox-trail 1.6s linear both;transform:translateX(0)}
+.fox-event-bars{position:absolute;inset:0;display:flex;justify-content:space-between}.fox-event-bars i{height:100%;width:10%;background:var(--event-team);transform:scaleX(0);animation:fox-bars 4.5s ease both}.fox-event-bars i:nth-child(even){animation-delay:.09s}
+.fox-event>strong{position:absolute;inset:0;display:grid;place-items:center;font:900 3.6vw Arial;letter-spacing:1.5vw;color:#101216;animation:fox-word 4.5s ease both}
+.fox-event-wide{left:26vw;right:27vw;bottom:3.25vw;height:2.7vw}.fox-event-wide .fox-event-trail{font-size:1.3vw;letter-spacing:.2vw;animation-duration:3s}.fox-event-wide .fox-event-bars{display:none}.fox-event-wide>strong{font-size:1.4vw;letter-spacing:.2vw;color:#fff;animation:fox-wide 3s ease both}
+.fox-panel.stat-graphic{padding:min(2.1vw,3vh) 2vw min(1.7vw,2.5vh);gap:min(1.2vw,2vh)}.fox-heading h1{font-size:min(3.2vw,6vh)}.fox-heading p{font-size:min(1vw,2.1vh)}.fox-team-logo{width:min(5.2vw,10vh);height:min(5.2vw,10vh)}.fox-summary-innings h2,.fox-summary-innings header b{font-size:min(1.7vw,3vh)}.fox-summary-innings .fox-mini-logo{width:min(2.8vw,5vh);height:min(2.8vw,5vh)}.fox-result{padding:min(.6vw,1vh);font-size:min(1.05vw,2vh)}
+@keyframes fox-trail{from{transform:translateX(20%);opacity:0}15%,90%{opacity:1}to{transform:translateX(-20%);opacity:0}}
+@keyframes fox-bars{0%,24%{transform:scaleX(0)}44%,77%{transform:scaleX(1)}100%{transform:scaleX(0)}}
+@keyframes fox-word{0%,36%{opacity:0;letter-spacing:2.8vw}52%,77%{opacity:1;letter-spacing:1.2vw}100%{opacity:0;letter-spacing:2.5vw}}
+@keyframes fox-wide{0%,12%,95%,100%{opacity:0}25%,85%{opacity:1}}
+@media(prefers-reduced-motion:reduce){.fox-event-trail,.fox-event-bars i,.fox-event>strong{animation:none}.fox-event-trail{opacity:0}.fox-event-bars i{transform:scaleX(1)}.fox-event>strong{opacity:1;letter-spacing:.3vw}}

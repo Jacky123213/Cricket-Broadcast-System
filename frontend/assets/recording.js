@@ -38,7 +38,10 @@
     async start() {
       this.report('Checking recorder support…');
       if(!window.MediaRecorder) throw Error('This browser cannot record replay clips');
-      this.mime=['video/mp4','video/webm;codecs=vp8,opus','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));
+      // Firefox waits indefinitely for audio when Opus is requested without
+      // an audio track (Mozilla 1881826). Never request a missing track kind.
+      const audio=this.stream.getAudioTracks?.().some(t=>t.readyState==='live')||false;
+      this.mime=['video/mp4',audio?'video/webm;codecs=vp8,opus':'video/webm;codecs=vp8','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));
       if(!this.mime) throw Error('No supported recording codec');
       await this.clock.sync(this.report);
       if(this.cancelled)return;

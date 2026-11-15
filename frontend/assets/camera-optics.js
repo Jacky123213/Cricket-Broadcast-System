@@ -1,13 +1,14 @@
 (function(){
  'use strict';
  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
- window.DRSOptics={async create(raw,slider,label){
+ window.DRSOptics={async create(raw,slider,label,options={}){
   const track=raw.getVideoTracks()[0],caps=track.getCapabilities?.()||{};
   let zoom=1,closed=false,timer=null,frameHandle=null,output=raw,source=null,canvas=null,pending=false,wanted=1;
   const native=caps.zoom&&Number.isFinite(caps.zoom.min)&&caps.zoom.max>caps.zoom.min;
   let min=native?caps.zoom.min:1,max=native?caps.zoom.max:4,step=native?(caps.zoom.step||.01):.01;
   let mode=native?'Camera zoom':'Digital zoom';
-  if(!native){
+  if(!native&&options.directCapture){max=1;mode='Direct camera · background-safe capture (digital zoom off)';}
+  else if(!native){
    canvas=document.createElement('canvas');
    if(!canvas.captureStream){max=1;mode='Zoom unavailable in this browser';}
    else{

@@ -7,6 +7,7 @@ from collections import deque
 from pathlib import Path
 from .scoreboard_protocol import ScoreDecoder
 from .broadcast_graphics import BroadcastGraphics
+from .graphics_packs import GraphicsPacks
 
 DEFAULT = dict(team1='HOME', team2='AWAY', color1='#ec218c', color2='#ff922e',
                logo1='', logo2='', runs='', wickets='', overs='',
@@ -94,6 +95,7 @@ class State:
                 self.branding.update(saved_branding)
             except (ValueError, OSError, TypeError) as exc:
                 self.error = 'Could not restore broadcast logo: ' + str(exc)
+        self.packs = GraphicsPacks(self.folder)
         self.graphics = BroadcastGraphics()
         graphics_path = self.folder / 'broadcast.json'
         if graphics_path.exists():
@@ -145,6 +147,7 @@ class State:
             now = time.time()
             self.graphics.flush(now)
             graphics = self.graphics.snapshot(self.data, now)
+            graphics['presentation'] = self.packs.snapshot()
             self._save_graphics()
             result = dict(score=copy.deepcopy(self.data), status=self.status,
                         last_packet=self.last_packet, last_score=self.last_score,
@@ -222,6 +225,38 @@ class State:
 
     def branding_snapshot(self):
         with self.lock: return copy.deepcopy(self.branding)
+
+    def team_library(self):
+        with self.lock:
+            return copy.deepcopy(sorted(self.teams.values(), key=lambda row: team_key(row['name'])))
+
+    def save_team(self, profile):
+        """Edit a named team without replacing the live score or its batting order."""
+        if not isinstance(profile, dict) or set(profile) != {'name', 'color', 'logo'}:
+            raise ValueError('Supply a team name, colour and logo')
+        validate({'team1': profile['name'], 'color1': profile['color'], 'logo1': profile['logo']})
+        name = profile['name'].strip()
+        if not name: raise ValueError('Enter a team name')
+        with self.lock:
+            identity = team_key(name)
+            if identity not in self.teams and len(self.teams) >= 100:
+                raise ValueError('At most 100 teams can be saved')
+            saved = {**profile, 'name': name}
+            self.teams[identity] = saved
+            updated = dict(self.data)
+            for slot in (1, 2):
+                if team_key(updated[f'team{slot}']) == identity:
+                    updated[f'color{slot}'], updated[f'logo{slot}'] = saved['color'], saved['logo']
+            self._persist_settings(updated)
+            self.data = updated
+            # Existing innings retain team identities and receive the corrected appearance.
+            for innings in self.graphics.innings:
+                for prefix in ('', 'opposition_'):
+                    if team_key(innings.get('opposition' if prefix else 'team', '')) == identity:
+                        innings[prefix+'color'], innings[prefix+'logo'] = saved['color'], saved['logo']
+                        self.graphics.dirty = True
+            self._save_graphics()
+            return self.team_library()
 
     def save_branding(self, changes):
         validate_branding(changes)

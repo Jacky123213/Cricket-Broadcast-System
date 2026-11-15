@@ -31,7 +31,7 @@ async function output(search='?follow=1&clean=1&client=obs&audio=1'){
   }
   const meters=[];w.DRSProgramHealth.AudioMeter=class extends Meter{constructor(){super();meters.push(this);}};
   w.fetch=async(url,options={})=>{if(fail&&url==='/api/broadcast/program')throw Error('Offline');if(options.method==='POST'){const body=JSON.parse(options.body);requests.push({url,body});if(url.endsWith('/program')){data.program.revision++;if(body.action==='audio')data.program.muted=body.muted;if(body.action==='retry')data.program.retry_token++;}return {ok:true,json:async()=>copy(data)};}return {ok:true,json:async()=>copy(data)};};
-  w.eval(read('frontend/broadcast/program-output.js'));await settle();
+  w.eval(read('frontend/broadcast/program-transition.js'));w.eval(read('frontend/broadcast/program-output.js'));await settle();
   return {...h,buffers,players,meters,requests,data,setData(v){data=v;},setFail(v){fail=v;},health:()=>w.CricketProgram.health()};
 }
 test('shared output follows commands without restarting on each poll; selected offline source never substitutes',async()=>{
@@ -44,6 +44,18 @@ test('shared output follows commands without restarting on each poll; selected o
     h.data.program.retry_token++;h.data.program.revision++;await h.tick(750);assert.equal(h.buffers[2].closed,true);assert.equal(h.buffers.length,4);
   }finally{h.close();}assert.equal(h.timers.size,0);
 });
+test('camera change holds a real frame, suppresses buffering and fades only when the new frame arrives',async()=>{
+ const h=await output();try{let drawn=null;h.w.HTMLCanvasElement.prototype.getContext=()=>({drawImage:v=>drawn=v});const old=h.buffers[0],v=old.player.active.video;Object.defineProperties(v,{videoWidth:{value:640},videoHeight:{value:360}});old.callbacks.onFrame({at:995000,delay:5,audio:false});
+ h.data.program.camera_id='crease';h.data.program.revision++;await h.tick(750);const next=h.buffers[1],hold=h.d.querySelector('.program-hold');next.h.last_frame_age_ms=null;assert.equal(drawn,v);assert.ok(hold);assert.equal(hold.style.opacity,'1');assert.equal(h.d.getElementById('empty').hidden,true);assert.equal(old.closed,true);
+ next.callbacks.onBuffering();assert.equal(h.d.getElementById('empty').hidden,true);old.callbacks.onFrame({at:990000,delay:10,audio:true});assert.equal(next.hasAudio,false,'obsolete callbacks cannot reveal/mute/change the new output');assert.equal(hold.style.opacity,'1');assert.equal(h.health().state,'buffering');
+ next.callbacks.onFrame({at:995000,delay:5,audio:false});assert.equal(hold.style.opacity,'0');assert.match(hold.style.transition,/180ms/);await h.tick(200);assert.equal(h.d.querySelector('.program-hold'),null);
+ }finally{h.close();}
+});
+
+test('an unavailable replacement cannot leave a frozen camera on air forever',async()=>{
+ const h=await output();try{h.w.HTMLCanvasElement.prototype.getContext=()=>({drawImage(){}});const v=h.buffers[0].player.active.video;Object.defineProperties(v,{videoWidth:{value:640},videoHeight:{value:360}});h.data.program.camera_id='crease';h.data.program.revision++;await h.tick(750);h.buffers[1].callbacks.onBuffering();await h.tick(8000);assert.equal(h.d.querySelector('.program-hold'),null);assert.equal(h.d.getElementById('empty').hidden,false);}finally{h.close();}
+});
+
 test('playing health requires advancing decoded frames, authentic graphics reports, and a measured audio signal',async()=>{
   const h=await output();try{
     const b=h.buffers[0];b.callbacks.onFrame({at:995000,delay:5,audio:true});assert.equal(h.health().state,'playing');assert.equal(h.health().meter_state,'unavailable');

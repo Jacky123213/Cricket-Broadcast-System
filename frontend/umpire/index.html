@@ -1,17 +1,17 @@
 <!doctype html>
 <html lang="en">
-<head>
+<head><script src="/static/preferences.js"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0d110f">
-  <title>Umpire Console · Backyard Cricket DRS</title>
+  <title>Replay Studio · Cricket Broadcast System</title>
   <link rel="stylesheet" href="/static/styles.css?v=1.1.2">
-<link rel="stylesheet" href="/static/studio.css?v=0.15.2"><link rel="stylesheet" href="/static/app-theme.css?v=1.3.0"></head>
-<body class="app-ui">
+<link rel="stylesheet" href="/static/studio.css?v=0.15.2"><link rel="stylesheet" href="/static/app-theme.css?v=1.3.0"><link rel="stylesheet" href="/static/media-processing.css"><link rel="stylesheet" href="/static/operator-layout.css"><script defer src="/static/operator-nav.js"></script><link rel="stylesheet" href="/static/replay-layout.css"></head>
+<body class="app-ui" data-operator="replay">
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark" aria-hidden="true"></div>
-      <div><div class="brand-kicker">Umpire console</div><div class="brand-title">Backyard Cricket DRS</div></div>
+      <div><div class="brand-kicker">Umpire console</div><div class="brand-title">Replay Studio</div></div>
     </div>
     <div class="console-summary">
       <div id="clock" class="clock">00:00:00</div>
@@ -29,6 +29,7 @@
     <section class="panel review-desk" data-collapsible="review-controls"><h2>Review controls</h2>
       <div class="replay-controls" id="reviewButtons"></div>
       <p id="eventStatus" role="status">Choose a review to replay the incident around now.</p>
+      <p><a class="btn" href="/match-day#drsReview">Broadcast a review · audience graphics &amp; decision</a></p><p class="muted">The controls below are private. Use the broadcast review desk to explicitly announce or take evidence on air.</p>
       <label>Seconds before <input id="windowBefore" type="number" min="1" max="30" value="5"></label>
       <label>Seconds after <input id="windowAfter" type="number" min="0" max="10" value="3"></label>
       <meter id="soundMeter" min="0" max="1" value="0"></meter><p id="soundLevel">No microphone analysis received</p>
@@ -42,6 +43,7 @@
     <section id="replayPanel" data-pane="preview" hidden aria-label="Replay studio">
       <header class="studio-heading"><div><p class="eyebrow">MULTI-ANGLE REVIEW</p><h1>Replay studio</h1></div><span id="replayState" class="studio-state">PAUSED</span><button class="btn" id="returnLive">Return to LIVE</button></header>
       <p id="replayNote" role="status"></p>
+      <div id="replayProcessing" class="media-processing" role="status" hidden><span class="media-spinner" aria-hidden="true"></span><strong>Review processing</strong><span>Loading the complete recorded window before playback.</span></div>
       <section id="replayViews" data-collapsible="replay-views"><h2>Replay viewer</h2><div class="mobile-view-tabs"><button class="btn" data-pane="preview" aria-pressed="true">View 1</button><button class="btn" data-pane="program" aria-pressed="false">View 2</button></div>
       <div class="studio-monitors"><section id="previewSlot" aria-label="Camera view 1"><button class="empty-camera-slot" id="previewEmpty"><span>＋</span><strong>View 1</strong>Tap to choose a camera</button></section><section id="programSlot" aria-label="Camera view 2"><button class="empty-camera-slot" id="programEmpty"><span>＋</span><strong>View 2</strong>Tap to choose a camera</button></section></div>
       </section><section id="replaySources" data-collapsible="replay-angles"><div class="source-heading"><h2>Camera angles</h2><span>Tap a view above to choose its camera</span></div>
@@ -57,6 +59,14 @@
       <div id="cameraPicker" class="camera-picker" role="dialog" aria-modal="true" aria-labelledby="pickerTitle" hidden><div class="panel"><h2 id="pickerTitle">Choose camera</h2><label for="pickerCamera">Camera</label><select id="pickerCamera"></select><div><button class="btn btn-primary" id="pickerApply">Use camera</button><button class="btn" id="pickerCancel">Cancel</button></div></div></div>
       <section id="focusAudio" class="focus-audio" aria-label="Fullscreen audio waveform" hidden><label for="focusAudioSource">Waveform source</label><select id="focusAudioSource"></select><canvas id="focusWaveform" width="480" height="64" tabindex="0" aria-label="Audio waveform; click to seek or use left and right arrow keys"></canvas><p id="focusAudioStatus" role="status"></p><button class="btn" id="focusAudioListen">Listen to source</button><small>Spikes are possible impacts, not proof of an edge.</small></section>
       <div id="replayTransport" class="transport-dock">
+        <details id="reviewBroadcastControls" class="review-broadcast-controls"><summary id="shareReviewSummary">Broadcast this umpire review · OFF AIR</summary><div class="review-share-body">
+          <p>Links the selected evidence view, playback, zoom and pan—not the private controls. Preparing is off air; Take publishes it. No intro animation or automatic scoring changes.</p>
+          <div class="review-share-fields"><label>Review type<select id="shareReviewKind"><option value="lbw">LBW</option><option value="run_out">Run out</option><option value="stumping">Stumping</option><option value="caught_behind">Caught behind</option><option value="general">General</option></select></label><label>Original decision<select id="shareReviewOriginal"><option value="not_given">Not given</option><option value="out">Out</option><option value="not_out">Not out</option></select></label><label><input id="shareReviewWaveform" type="checkbox"> Include selected-source audio envelope</label><label><input id="shareReviewAssessment" type="checkbox"> Show manual LBW assessments</label></div>
+          <div class="review-share-buttons"><button class="btn" id="shareReviewLink" type="button">Prepare broadcast follow</button><button class="btn" id="shareReviewAnnounce" type="button" disabled>Announce · DECISION REVIEWED</button><button class="btn btn-primary" id="shareReviewTake" type="button" disabled>Take this view on air</button><button class="btn" id="shareReviewEnd" type="button" disabled>End broadcast / return live</button></div>
+          <p id="shareReviewStatus" role="status">Choose an evidence angle, then prepare broadcast follow.</p>
+          <details><summary>Manual LBW assessments · no predictive tracking</summary><div class="review-share-fields"><label>Pitching<select id="sharePitching"><option value="not_assessed">Not assessed</option><option value="outside_off">Outside off</option><option value="in_line">In line</option><option value="outside_leg">Outside leg</option></select></label><label>Impact<select id="shareImpact"><option value="not_assessed">Not assessed</option><option value="in_line">In line</option><option value="outside_off">Outside off</option><option value="outside_leg">Outside leg</option></select></label><label>Wickets<select id="shareWickets"><option value="not_assessed">Not assessed</option><option value="hitting">Hitting</option><option value="missing">Missing</option><option value="uncertain">Uncertain</option></select></label></div><button class="btn" id="shareApplyLbw" type="button" disabled>Apply manual assessment</button></details>
+          <div class="review-share-buttons"><button class="btn" type="button" data-share-verdict="out" disabled>Show OUT</button><button class="btn" type="button" data-share-verdict="not_out" disabled>Show NOT OUT</button><button class="btn" type="button" data-share-verdict="inconclusive" disabled>Show INCONCLUSIVE</button></div>
+        </div></details>
         <div class="timeline-label"><label for="replayPosition">Replay timeline</label><output id="replayTime">0.00 s</output><button class="btn" id="exitFocus" hidden>Exit fullscreen</button></div>
         <input id="replayPosition" type="range" min="0" max="60000" value="0" step="1" aria-label="Replay timeline">
         <div class="transport-buttons"><button class="btn btn-primary" id="replayPlay">Play</button><button class="btn" id="replayPause">Pause</button><button class="btn" data-replay-step="-500">−0.5 s</button><button class="btn" data-replay-step="500">+0.5 s</button><button class="btn" data-replay-step="-33.333">−1/30 s</button><button class="btn" data-replay-step="33.333">+1/30 s</button><button class="btn" id="replayRestart">Restart</button><label>Speed <select id="replaySpeed"><option value=".25">0.25×</option><option value=".5">0.5×</option><option value="1" selected>1×</option></select></label></div>
@@ -110,6 +120,6 @@
   <script defer src="/static/sections.js?v=1.3.0"></script><script defer src="/static/common.js?v=0.15.2"></script>
   <script defer src="/static/battery.js?v=1.1.2"></script>
   <script defer src="/static/view-controls.js?v=0.15.2"></script><script defer src="/static/live-inspect.js?v=0.15.2"></script><script defer src="/static/umpire.js?v=1.1.2"></script>
-<script defer src="/static/replay-engine.js?v=1.5.1"></script><script defer src="/static/replay.js?v=1.5.1"></script>
-<script defer src="/static/ball-detector.js?v=0.15.2"></script><script defer src="/static/review-desk.js?v=0.15.2"></script><script defer src="/static/assistance.js?v=0.15.2"></script></body>
+<script defer src="/static/preload-clips.js?v=1.7.0-rc.3"></script><script defer src="/static/replay-engine.js?v=1.7.0-rc.3"></script><script defer src="/static/replay.js?v=1.7.0-rc.3"></script>
+<script defer src="/static/ball-detector.js?v=0.15.2"></script><script defer src="/static/review-desk.js?v=1.8.0-rc.2"></script><script defer src="/static/assistance.js?v=0.15.2"></script><script defer src="/static/review-follow.js?v=1.8.0-rc.2"></script></body>
 </html>

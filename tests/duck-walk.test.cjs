@@ -1,0 +1,3 @@
+const test=require('node:test'),assert=require('node:assert/strict'),{removeBackground,walkX}=require('../frontend/assets/duck-walk.js');
+test('duck walks right to left across the scoreboard, not under it',()=>{assert.equal(walkX(1920,100,0),1920);assert.equal(walkX(1920,100,1),-100);assert.ok(walkX(1920,100,.7)<walkX(1920,100,.2));});
+test('edge-connected white background becomes transparent but enclosed white body stays visible',()=>{const w=5,h=5,pixels=new Uint8ClampedArray(w*h*4).fill(255);for(let y=1;y<4;y++)for(let x=1;x<4;x++)if(x===1||x===3||y===1||y===3){const n=(y*w+x)*4;pixels[n]=pixels[n+1]=pixels[n+2]=0;}removeBackground(pixels,w,h);assert.equal(pixels[3],0);assert.equal(pixels[(2*w+2)*4+3],255);assert.equal(pixels[(1*w+1)*4+3],255);});

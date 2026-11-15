@@ -477,19 +477,24 @@ def test_live_stumping_with_and_without_fielder_and_six_and_out(tmp_path):
     assert data['graphics']['innings'][0]['last_wicket']['dismissal'] == 'Obstructing the field'
 
 
-def test_bowling_card_holds_and_follows_current_opposition():
+@pytest.mark.parametrize('kind', ['batting_card', 'bowling_card'])
+def test_team_cards_hold_and_follow_current_innings(kind):
     engine = BroadcastGraphics()
     s = scoreboard(runs='20', overs='2.0', bowler='Dee', bowler_figures='2–7', bowler_overs='1.2')
     data = observe(engine, s)
     assert data['innings'][0]['bowlers'][0]['economy'] == 5.25
-    engine.show('bowling_card', 101)
+    engine.show(kind, 101)
     assert engine.snapshot(s, 10000)['active']['until'] is None
     engine.end_innings(10001)
     chase = scoreboard(team1='Creek', team2='Pavilion', runs='0', color1=s['color2'], color2=s['color1'])
     engine.action({'action': 'start_chase'}, chase, 10002)
     data = observe(engine, chase, 10003)
-    assert data['active']['kind'] == 'bowling_card' and data['active']['innings'] == 1
+    assert data['active']['kind'] == kind and data['active']['innings'] == 1
     assert data['innings'][data['active']['innings']]['opposition'] == 'Pavilion'
+    assert data['innings'][data['active']['innings']]['team'] == 'Creek'
+    # Even an old browser/API sending a stale selection must get current cards.
+    engine.show(kind, 10003, innings=0)
+    assert engine.snapshot(chase, 10003)['active']['innings'] == 1
     engine.action({'action':'hide'}, chase, 10004)
     assert engine.snapshot(chase, 10005)['active'] is None
 

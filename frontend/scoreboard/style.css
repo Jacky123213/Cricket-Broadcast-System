@@ -3,3 +3,4 @@
 .over-label{display:block;font-size:.7vw;letter-spacing:.1vw;color:#b6c7db;margin-top:.3vw}.balls{flex-wrap:wrap;max-width:100%;gap:.22vw}.balls span{flex:0 0 1.8vw;height:1.8vw;line-height:1.65vw;font-size:1vw;min-width:0;overflow:hidden}.balls .pending{background:transparent;border-color:#aab8cc}.balls .wicket{background:#ffffff18;font-weight:900}.balls .boundary{background:var(--team2);color:#081321;border-color:var(--team2)}
 /* Keep the bottom border intact across the complete scoreboard width. */
 .scorebar{clip-path:polygon(0 8%,24% 0,100% 0,100% 100%,0 100%)}
+.ticker.decision-reviewed #bannerText{animation:none!important;transform:none!important;font-weight:800;letter-spacing:.08em}

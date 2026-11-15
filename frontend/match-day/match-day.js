@@ -1,7 +1,7 @@
 'use strict';
 const $=id=>document.getElementById(id);
 let latest=null,chosenReport='',userChoseReport=false,scrubbing=false,pending=false;
-const names={scorebar:'Scoreboard',hidden:'Hidden',run_chart:'Runs per over',batting_card:'Batting card',bowling_card:'Bowling card',wicket_card:'Last wicket',innings_break:'Innings break',match_summary:'Match summary'};
+const names={scorebar:'Scoreboard',hidden:'Hidden',run_chart:'Runs per over',batting_card:'Batting card',bowling_card:'Bowling card',wicket_card:'Last wicket',innings_break:'Innings break',match_summary:'Match summary',lineup:'Team lineup',player_batting:'Batting career',player_bowling:'Bowling career',coming_up:'Coming up',toss:'Toss',sponsor:'Sponsor',win:'Result badge'};
 const seconds=v=>Number.isFinite(v)?v.toFixed(1)+' s':'Unavailable';
 function error(message){$('deskError').textContent=message;}
 async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(6000)});const data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'Command rejected');return data;}
@@ -27,6 +27,7 @@ function renderProgram(){const {program:p,devices}=latest.program,g=latest.score
   options($('programCamera'),sourceRows,p.camera_id||'');$('programCamera').disabled=!sourceRows.some(([id])=>id);
   const cameraOnline=devices.some(d=>d.device_id===p.camera_id);
   $('programTally').textContent=p.mode==='replay'?'REPLAY · '+(p.playing?'PLAY':'PAUSED'):!p.camera_id?'NO CAMERA':cameraOnline?'LIVE · DELAYED':'CAMERA OFFLINE';$('programTally').classList.toggle('replay',p.mode==='replay');$('programTally').classList.toggle('warning',p.mode==='live'&&!cameraOnline);
+  if(latest.program.drs&&['on_air','decision'].includes(latest.program.drs.phase)){$('programTally').textContent='UMPIRE REVIEW · '+(latest.program.drs.phase==='decision'?'DECISION':p.playing?'PLAY':'PAUSED');$('programCamera').disabled=true;}
   $('programTransport').hidden=p.mode!=='replay';const duration=p.review?p.review.end_ms-p.review.start_ms:0;
   $('programPosition').max=Math.max(0,duration-1);if(!scrubbing)$('programPosition').value=p.position_ms;
   if(document.activeElement!==$('programSpeed'))$('programSpeed').value=String(p.speed);$('programTime').textContent=(p.position_ms/1000).toFixed(1)+' / '+(duration/1000).toFixed(1)+' s';
@@ -37,8 +38,11 @@ function renderProgram(){const {program:p,devices}=latest.program,g=latest.score
   options(selector,rows.length?rows:[['0','Waiting for innings']],rows.some(([id])=>id===old)?old:String(Math.max(0,rows.length-1)));
   document.querySelectorAll('[data-graphic],#surgeProgram').forEach(b=>b.disabled=!innings.length);
   $('requestedGraphic').textContent=p.mode==='replay'?'Hidden during replay':'Requested: '+(names[g.active?.kind]||'Scoreboard')+(g.power_surge?' + Surge':'');
+  if(latest.program.drs?.phase==='announced')$('requestedGraphic').textContent='Scoreboard · DECISION REVIEWED (other cards/Surge hidden)';
   $('surgeProgram').textContent=g.power_surge?'Power Surge off':'Power Surge on';$('surgeProgram').setAttribute('aria-pressed',String(g.power_surge));
   if(document.activeElement!==$('graphicsVisible'))$('graphicsVisible').checked=s.visible;
+  window.CricketReviewDesk?.update(latest.program);
+  window.CricketCameraTiles?.update(devices,p,g);
 }
 function renderHealth(){const p=latest.program.program,clients=[...latest.health.clients].sort((a,b)=>(a.role==='obs'?0:1)-(b.role==='obs'?0:1)||a.report_age_ms-b.report_age_ms);
   if(!userChoseReport)chosenReport=clients.find(c=>c.role==='obs')?.client_id||clients.find(c=>c.role==='preview')?.client_id||clients[0]?.client_id||'';
@@ -63,7 +67,7 @@ function renderHealth(){const p=latest.program.program,clients=[...latest.health
 }
 $('outputClient').onchange=()=>{chosenReport=$('outputClient').value;userChoseReport=true;if(latest)renderHealth();};
 async function read(url){const r=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(3500)});if(!r.ok)throw Error('Server HTTP '+r.status);return r.json();}
-async function poll(){try{const [program,score,health]=await Promise.all(['/api/broadcast/program','/api/scoreboard/state','/api/broadcast/health'].map(read));latest={program,score,health};renderProgram();renderHealth();}catch(e){$('healthSummary').textContent='SERVER UNAVAILABLE';$('healthSummary').classList.add('warning');$('programTally').textContent='CONTROL LINK LOST';$('outputIdentity').textContent='No fresh server report. Previously displayed readings are unavailable.';for(const id of ['healthDelay','healthFootage','healthHeadroom','healthLate','healthDecode','healthRequests','healthFrame','healthGraphic'])$(id).textContent='—';$('healthPlayback').textContent='Unavailable';$('healthDropped').textContent='Unavailable';$('programAudioMeter').value=-60;$('programAudioLevel').textContent='Meter unavailable · server disconnected';$('programAudioState').textContent='No fresh player audio report';error(e.message);}finally{setTimeout(poll,1000);}}
+async function poll(){try{const [program,score,health]=await Promise.all(['/api/broadcast/program','/api/scoreboard/state','/api/broadcast/health'].map(read));latest={program,score,health};renderProgram();renderHealth();window.CricketPackMenu?.update(score);}catch(e){$('healthSummary').textContent='SERVER UNAVAILABLE';$('healthSummary').classList.add('warning');$('programTally').textContent='CONTROL LINK LOST';$('outputIdentity').textContent='No fresh server report. Previously displayed readings are unavailable.';for(const id of ['healthDelay','healthFootage','healthHeadroom','healthLate','healthDecode','healthRequests','healthFrame','healthGraphic'])$(id).textContent='—';$('healthPlayback').textContent='Unavailable';$('healthDropped').textContent='Unavailable';$('programAudioMeter').value=-60;$('programAudioLevel').textContent='Meter unavailable · server disconnected';$('programAudioState').textContent='No fresh player audio report';error(e.message);}finally{setTimeout(poll,1000);}}
 function outputAddress(){const base=$('programAddress').value;if(!base)return;const url=new URL('/broadcast',base);url.search='?follow=1&clean=1&client=obs&audio=1';$('sharedOutputUrl').textContent=url.href;}
 $('programAddress').onchange=outputAddress;
 read('/api/server-info').then(info=>{options($('programAddress'),(info.addresses||[]).map((url,n)=>[url,new URL(url).host+(n===0?' · preferred LAN':'')]));outputAddress();}).catch(e=>{$('sharedOutputUrl').textContent='Network address unavailable: '+e.message;});

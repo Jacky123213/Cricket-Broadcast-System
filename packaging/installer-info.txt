@@ -1,0 +1,57 @@
+Cricket Broadcast System 1.10.0-rc.1 — Windows prerelease
+
+Adds ten organised operator sections and the dark/light interface. Use Settings
+for appearance and local previews, Match Setup for rules and playing lineups,
+Teams & Players for reusable rosters, and Graphics for private previews and output.
+Installed-PC approvals are now under Connections on the host PC.
+See OPERATOR_UI_GUIDE.md for the new navigation and saved-draft behaviour.
+
+Adds BBL and FOX ODI graphics presets, lineup/player cards, toss/coming-up/sponsor
+graphics, event animations and optional fielding-side wicket reels at innings break.
+See GRAPHICS_PACKS_GUIDE.md for setup. Existing replay, scoring and review features remain.
+Includes live broadcast following of the actual umpire review: camera selection,
+replay position, speed, zoom and pan, with a clean DECISION REVIEWED strip.
+Audio envelopes and manual LBW overlays are optional. No branded intro.
+The separate Match Day review desk remains available.
+Includes the live match centre, three PC camera slots and optional highlights.
+This candidate is not a stable release.
+See LIVE_MATCH_GUIDE.md after installing for setup and remaining hardware tests.
+Earlier camera, Firefox silent recording, complete-clip loading and highlight
+event-selection fixes remain. Review controls do not change the score. Audio
+waveforms and manual LBW boxes are not professional edge/ball-tracking systems.
+
+This installer includes Python and the application's Python dependencies.
+No separate Python installation or pip commands are needed.
+
+Windows 10 (1809+) / Windows 11, x64. ARM64 is not a native build target yet.
+
+The application installs for your Windows user. It does not replace your old
+.bat installation. Close the old app before using this version: both normally
+use port 8765.
+
+Each launch offers Host a studio or Connect to a studio. Connect controls another
+PC on your trusted network without running a second local server or Bluetooth
+receiver. New PCs need a code from host Connections and the host's public CA;
+certificate trust requires explicit approval. Private keys stay on the host.
+
+When hosting, choose fresh setup or explicitly import an old app folder.
+Import copies recognised match data, team/logo settings and certificates with
+a backup. Existing recordings remain in their original locations.
+
+Saved files: %LOCALAPPDATA%\CricketBroadcastSystem
+Program files: %LOCALAPPDATA%\Programs\CricketBroadcastSystem
+
+Upgrades and uninstalling preserve saved data and certificates. Uninstalling
+does not remove the shared WebView2 Runtime or your trusted local CA.
+
+If WebView2 is missing, the installer will ask for approval before installing
+it from Microsoft. First-run setup separately asks approval to trust this
+installation's local CA for your Windows user only.
+
+Phones/tablets and another OBS PC still need the public CA installed/trusted.
+Private certificate keys must never be published or copied to camera devices.
+Allow Windows Firewall access only on a trusted Private network. This app is
+for trusted local networks, not direct public-internet hosting.
+
+This test build is unsigned. Do not bypass a security warning blindly; only
+verify the file's SHA-256 against the release's SHA256SUMS.txt.

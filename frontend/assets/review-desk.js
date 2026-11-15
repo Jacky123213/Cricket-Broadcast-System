@@ -3,7 +3,7 @@
  const $=id=>document.getElementById(id);let manifest=null,lastViews=null,lastDetection=0,working=false;
  const status=t=>$('eventStatus').textContent=t;
  function button(text,fn){const b=document.createElement('button');b.className='btn';b.textContent=text;b.onclick=()=>Promise.resolve(fn()).catch(e=>status(e.message));return b;}
- for(const kind of ['RUN OUT','EDGE','CATCH','STUMPING','GENERAL'])$('reviewButtons').append(button(kind+' REVIEW',async()=>{
+ for(const kind of ['RUN OUT','EDGE','CATCH','STUMPING','LBW','GENERAL'])$('reviewButtons').append(button(kind+' REVIEW',async()=>{
   if(working)return;working=true;
   try{
    const before=Number($('windowBefore').value),after=Number($('windowAfter').value);
@@ -15,7 +15,7 @@
     if(b.server_ms>=end&&c.length&&c.every(v=>v.end_ms>=end))break;
     await new Promise(r=>setTimeout(r,700));
    }
-   await window.DRSReplay.openWindow(now-before*1000,end);status(kind+' · manual review');
+   window.dispatchEvent(new CustomEvent('drs-review-type',{detail:kind}));await window.DRSReplay.openWindow(now-before*1000,end);status(kind+' · manual review');
   }catch(e){status(e.message);}finally{working=false;}
  }));
  fetch('/api/server-info').then(r=>r.json()).then(info=>{info.camera_urls.forEach((url,i)=>{const o=document.createElement('option');o.value=i;o.textContent=url;$('qrAddress').append(o);});}).catch(e=>$('qrNote').textContent=e.message);

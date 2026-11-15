@@ -10,8 +10,9 @@ proto.load=function(){queueMicrotask(()=>this.dispatchEvent(new w.Event('loadedm
 const sockets=[];
 w.WebSocket=class{static OPEN=1;constructor(){this.listeners={};sockets.push(this);}addEventListener(type,fn){this.listeners[type]=fn;}send(){}};w.RTCPeerConnection=class{};
 const clips=['landscape','portrait','third','fourth'].flatMap(id=>[0,4000].map((t,i)=>({id:id+i,device_id:id,start_ms:t,end_ms:t+5000,url:'/clips/'+id+i,uncertainty_ms:3})));
-w.fetch=async(url,opts)=>({ok:true,json:async()=>url.startsWith('/api/replays')?{id:'review',start_ms:0,end_ms:8000,live_delay_ms:3000,clips,audio:{landscape:[{t:1000,peak:.5,impact:true}],portrait:[{t:1500,peak:.3,impact:false}]}}:url==='/api/devices'?{devices:['landscape','portrait','third','fourth'].map(id=>({device_id:id,name:id}))}:url==='/api/buffer'?{server_ms:10000,cameras:{},recorders:{},audio:{}}:url==='/api/server-info'?{camera_urls:['https://192.168.1.2:8765/camera']}:{sent_ms:10000}});
-for(const name of ['sections','common','battery','view-controls','live-inspect','umpire','replay-engine','replay','ball-detector','review-desk','assistance'])w.eval(fs.readFileSync(root+'frontend/assets/'+name+'.js','utf8'));
+w.URL.createObjectURL=blob=>'blob:http://local/'+Math.random();w.URL.revokeObjectURL=()=>{};
+w.fetch=async(url,opts)=>({ok:true,headers:{get:name=>name==='content-type'?'video/mp4':null},blob:async()=>new w.Blob(['encoded'],{type:'video/mp4'}),json:async()=>url.startsWith('/api/replays')?{id:'review',start_ms:0,end_ms:8000,live_delay_ms:3000,clips,audio:{landscape:[{t:1000,peak:.5,impact:true}],portrait:[{t:1500,peak:.3,impact:false}]}}:url==='/api/devices'?{devices:['landscape','portrait','third','fourth'].map(id=>({device_id:id,name:id}))}:url==='/api/buffer'?{server_ms:10000,cameras:{},recorders:{},audio:{}}:url==='/api/server-info'?{camera_urls:['https://192.168.1.2:8765/camera']}:{sent_ms:10000}});
+for(const name of ['sections','common','battery','view-controls','live-inspect','umpire','preload-clips','replay-engine','replay','ball-detector','review-desk','assistance'])w.eval(fs.readFileSync(root+'frontend/assets/'+name+'.js','utf8'));
 w.CricketSections.init();
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 (async()=>{

@@ -1,13 +1,48 @@
 # Cricket Broadcast System
 
-Current release: **1.5.1** · Scoreboard graphics **0.7.2** · DRS engine **0.15.2**.
+> **Windows prerelease: 1.10.0-rc.1** — Python is bundled; users do not install
+> Python or run pip. Download the Setup.exe from
+> [Releases](https://github.com/Jacky123213/Cricket-Broadcast-System/releases).
+> Start with [OPERATOR_UI_GUIDE.md](OPERATOR_UI_GUIDE.md) for the ten-section
+> interface and dark/light settings. This unsigned candidate needs full match-day
+> hardware testing. The earlier clean Windows 10/no-Python installation was reported
+> working; stable v1.5.1 and archived prereleases remain available.
+
+Prerelease: **1.10.0-rc.1** · Scoreboard graphics **0.10.0** · DRS engine **0.15.2**.
 
 Backyard Cricket Studio combines **Backyard DRS Replay Studio 0.15.2** and **Backyard Scoreboard 0.2** into one local Windows application.
 
-The PC runs a native desktop window with Replay Studio, Scoreboard, Settings and Troubleshooting sections. Field cameras and an optional iPad umpire console use responsive web pages over the local network. Match operation does not require cloud access.
+The PC runs a native desktop window with ten organised sections: Match Day,
+Replay Studio, Scoreboard, Match Setup, Teams & Players, Graphics, Highlights,
+Connections, Settings and Help. Field cameras and an optional iPad umpire console
+use responsive web pages over the same local network. Match operation does not
+require cloud access. Appearance supports dark, light and the device setting.
 
 ## Features
 
+- Private graphic previews with explicit Show/Clear, scoped score/settings saves,
+  reusable team identities/rosters and match-specific playing lineups. Live-readout
+  polling preserves form drafts. Fold sections to reduce clutter. Operator theme
+  changes do not change broadcast team colours. See [OPERATOR_UI_GUIDE.md](OPERATOR_UI_GUIDE.md).
+
+- Two graphics presets: **BBL** (the existing pack) and **FOX ODI**. Includes ODI
+  scorebar/cards/lineups, optional portraits and career details, toss/sponsor/
+  coming-up/result graphics, and data-driven event animations. Fielding-only
+  wicket reels during innings breaks require enabled, complete saved highlights.
+  See [GRAPHICS_PACKS_GUIDE.md](GRAPHICS_PACKS_GUIDE.md).
+- Live umpire review follow: explicitly put the actual /umpire evidence view on
+  air, following camera/split selection, decoded position, speed, zoom and pan.
+  Clean footage with DECISION REVIEWED, optional recorded audio envelope and
+  manually entered LBW assessments. Missing controller updates pause the output.
+- Audience-facing DRS desk in Match Day: prepare one/two recorded angles privately,
+  announce on the live picture, explicitly take the loaded review on air, then
+  hold a manually entered decision. Includes audio waveform, manual run-out/
+  stumping markers and crease guides, and labelled manual LBW assessments—not
+  predictive ball tracking or an automatic edge/LBW decision. Scoring is separate.
+- Three independently named PC camera slots together on one `/cameras` desk, with separate camera dropdown preferences. Direct PC capture and server-requested heartbeats do not need microphone access or changing frames. Bare `/broadcast` follows Match Day's shared program camera with a short frame-ready crossfade; explicitly pinned camera links stay pinned.
+- Read-only, responsive local `/live` and `/ball-by-ball` match centre: scorecard, commentary, worm/Manhattan graphs, summary and opt-in persistent wicket/boundary highlights. STREAM and clips have separate controls; no wagon wheel yet. See the live match guide for capture/coverage limits.
+- Confirmed zero fours/sixes display 0; a confirmed duck can play the supplied silent duck animation along the scoreboard, right to left.
+- Host your studio on one PC, or connect another installed PC without running a second server/Bluetooth receiver. Nearby discovery, manual LAN address entry, explicit public-CA trust and host connection codes are included.
 - Match Day production desk: silent preview, shared camera cuts/live/replay controls, graphics and actual output health, with setup/corrections/troubleshooting separate.
 - **Live views on this screen** toggle in the sidebar: stop the PC window's Match Day and Replay Studio while the server, mobile controls and OBS continue. The preference is browser-local; scoreboard drafts are preserved. Turning it off closes that window's detailed replay.
 - Browser-specific decoded playback/audio telemetry: actual delay, coverage/headroom, frame/late/decode/request counters, score age and displayed graphics; stale/unavailable readings are clearly labelled.
@@ -32,6 +67,14 @@ The PC runs a native desktop window with Replay Studio, Scoreboard, Settings and
 - Recorded innings history and a statistics editor for details missing from the Bluetooth feed.
 
 ## Windows install
+
+For this local candidate, run `dist/CricketBroadcastSystem-Setup.exe` from this
+separate build folder. The linked GitHub release is the previous rc.3, not this build.
+Choose **Host a studio** on the camera/scoring PC or **Connect to a studio** on
+another Windows PC. See the installer guide for certificate/connection setup.
+The installer preserves saved match data and certificates on upgrades/uninstall.
+
+### Run from source (developers)
 
 1. Install 64-bit Python 3.11 or newer, including the `py` launcher.
 2. Run `SETUP_WINDOWS.bat` once while online.

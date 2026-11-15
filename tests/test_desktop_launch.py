@@ -34,16 +34,14 @@ def test_desktop_embeds_upgraded_broadcast_desk_without_cached_html(tmp_path):
     with patch("server.main.start_receiver"), TestClient(app) as client:
         desktop = client.get("/")
         assert f'/scoreboard?build={UI_BUILD_ID}' in desktop.text
-        assert 'data-score-section="statsEditor"' in desktop.text
-        assert 'data-score-section="graphicsOnAir"' in desktop.text
-        assert 'data-score-section="broadcastBranding"' in desktop.text
+        assert 'data-page-src="/graphics"' in desktop.text
+        assert 'data-page-src="/match-setup"' in desktop.text
+        assert 'data-page-src="/connections"' in desktop.text
         assert "__STUDIO_BUILD__" not in desktop.text
-        assert f'Studio {APP_VERSION} · Overlay {SCOREBOARD_VERSION}' in desktop.text
         page = client.get(f"/scoreboard?build={UI_BUILD_ID}")
-        assert 'id="statsEditor"' in page.text
-        assert "04 · Match summary" in page.text
-        assert "Save statistics" in page.text
-        assert f'/control.js?v={SCOREBOARD_VERSION}' in page.text
+        assert 'data-operator="scoreboard"' in page.text
+        assert f'/operator-assets/workspace.js?build={UI_BUILD_ID}' in page.text
+        assert 'id="statsEditor"' in client.get('/scoreboard?legacy=1').text
         assert f'/overlay.js?v={SCOREBOARD_VERSION}' in client.get('/overlay').text
         for route in ("/", "/scoreboard", "/overlay", "/control.js", "/scoreboard-assets/desk.css"):
             assert "no-store" in client.get(route).headers["cache-control"]

@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from .replay import now_ms
+from .broadcast_review import BroadcastReview
 
 
 class ProgramCommand(BaseModel):
@@ -18,7 +19,7 @@ class ProgramCommand(BaseModel):
     action: Literal['camera', 'replay', 'live', 'play', 'pause', 'seek', 'speed', 'audio', 'retry']
     camera_id: str | None = Field(default=None, max_length=80)
     seconds: Literal[10, 30, 60] = 10
-    position_ms: float | None = Field(default=None, ge=0, le=60000, allow_inf_nan=False)
+    position_ms: float | None = Field(default=None, ge=0, le=600000, allow_inf_nan=False)
     speed: Literal[.25, .5, 1] = 1
     muted: bool | None = None
 
@@ -44,18 +45,28 @@ class PlayerReport(BaseModel):
     audio_present: bool = False
     meter_dbfs: float | None = Field(default=None, ge=-120, le=0, allow_inf_nan=False)
     meter_state: Literal['active', 'suspended', 'unavailable', 'no_audio'] = 'unavailable'
-    graphics_kind: Literal['scorebar','hidden','run_chart','batting_card','bowling_card','wicket_card','innings_break','match_summary'] | None = None
+    graphics_kind: Literal['scorebar','hidden','run_chart','batting_card','bowling_card','wicket_card','innings_break','match_summary','lineup','player_batting','player_bowling','coming_up','toss','sponsor','win'] | None = None
     graphics_surge: bool = False
 
 
 class BroadcastDesk:
-    def __init__(self, replay, devices):
+    def __init__(self, replay, devices, appearance=lambda:'#b8e34b'):
         self.replay = replay
         self.devices = devices
         self.lock = asyncio.Lock()
         self.program = dict(revision=0, camera_id=None, mode='live', review_id=None,
                             playing=True, position_ms=0, speed=1, anchor_ms=now_ms(), muted=False, retry_token=0)
         self.reports = {}
+        self.review = BroadcastReview(self, lambda:now_ms(), appearance)
+        self.fielding_return = None
+
+    def end_fielding_reel(self):
+        review = self.replay.reviews.get(self.program['review_id'])
+        if review and review.get('kind')=='fielding_highlights':
+            self.replay.reviews.pop(review['id'],None)
+            self.program.update(mode='live',review_id=None,camera_id=review['return_camera_id'],playing=True,
+                                position_ms=0,anchor_ms=now_ms(),revision=self.program['revision']+1)
+            self.fielding_return = None
 
     def position(self, at):
         p = self.program
@@ -66,12 +77,19 @@ class BroadcastDesk:
 
     def snapshot(self):
         at = now_ms()
+        self.review.refresh(at)
         p = self.program
         roster = self.devices.connected_snapshot()
         if p['camera_id'] is None and roster:
             p['camera_id'] = next((d['device_id'] for d in roster if d['role']=='UMPIRE_POV'), roster[0]['device_id'])
             p['revision'] += 1
         review = self.replay.reviews.get(p['review_id'])
+        if not review and self.fielding_return and self.fielding_return[0]==p['review_id']:
+            p['camera_id']=self.fielding_return[1]
+            self.fielding_return=None
+        if review and review.get('kind')=='fielding_highlights' and not review.get('awaiting_ready') and self.position(at)>=review['end_ms']-1:
+            self.end_fielding_reel()
+            review = None
         if review:
             review['expires_ms'] = at+15*60*1000
         elif p['mode'] == 'replay':
@@ -83,7 +101,7 @@ class BroadcastDesk:
             result['playing'] = False
         # Program playback needs clip metadata, not the umpire waveform arrays.
         result['review'] = copy.deepcopy({k:v for k,v in review.items() if k!='audio'}) if review else None
-        return dict(program=result, devices=roster, server_ms=at)
+        return dict(program=result, devices=roster, server_ms=at, drs=self.review.snapshot())
 
     async def command(self, command):
         async with self.lock:
@@ -92,12 +110,18 @@ class BroadcastDesk:
             at = now_ms()
             action = command.action
             if action == 'camera':
+                if self.review.session and self.review.session['phase'] in ('on_air','decision'):
+                    raise HTTPException(409, 'Use the DRS review angle controls or return to live')
                 review = self.replay.reviews.get(p['review_id'])
+                if review and review.get('kind')=='fielding_highlights':
+                    raise HTTPException(409,'Return to live before changing the program camera')
                 choices = {d['device_id'] for d in self.devices.connected_snapshot()}
                 if p['mode']=='replay' and review: choices = set(review['coverage'])
                 if command.camera_id not in choices: raise HTTPException(409,'This camera has no available program source')
                 p['camera_id'] = command.camera_id
             elif action == 'replay':
+                if self.review.session and self.review.session['phase'] in ('on_air','decision'):
+                    raise HTTPException(409, 'End the DRS review before opening an ordinary replay')
                 id = p['camera_id']
                 clips = [c for c in self.replay.clips.values() if c['device_id']==id and c['end_ms']>at-90000]
                 if not clips: raise HTTPException(409,'No recorded footage for the selected camera')
@@ -110,6 +134,10 @@ class BroadcastDesk:
                 p.update(mode='replay', review_id=review['id'], position_ms=0, playing=True, speed=1, anchor_ms=at)
                 if old: self.replay.reviews.pop(old, None)
             elif action == 'live':
+                self.end_fielding_reel()
+                if self.review.session and self.review.session['phase'] in ('on_air','decision'):
+                    p['camera_id'] = self.review.session.get('return_camera_id',p['camera_id'])
+                self.review.clear()
                 old = p['review_id']
                 p.update(mode='live', review_id=None, position_ms=0, playing=True, speed=1, anchor_ms=at)
                 if old: self.replay.reviews.pop(old, None)
@@ -120,6 +148,13 @@ class BroadcastDesk:
                 p['retry_token'] += 1
             else:
                 if p['mode']!='replay': raise HTTPException(409,'Open a program replay first')
+                active_review = self.replay.reviews.get(p['review_id'])
+                if active_review and active_review.get('awaiting_ready'):
+                    raise HTTPException(409,'Wait for the fielding highlights to finish loading on every output')
+                if self.review.session and self.review.session.get('follow_controller'):
+                    raise HTTPException(409,'This review follows the umpire console; use its playback controls')
+                if self.review.session and self.review.session['phase']=='decision':
+                    raise HTTPException(409,'The umpire decision is held; return to live to end the review')
                 position = self.position(at)
                 if action=='seek':
                     if command.position_ms is None: raise HTTPException(422,'Choose a replay position')
@@ -145,6 +180,14 @@ class BroadcastDesk:
         if report.client_id not in self.reports and len(self.reports)>=32:
             raise HTTPException(429,'Too many output monitors; close unused broadcast pages')
         self.reports[report.client_id] = {**report.model_dump(), 'received_ms':now_ms()}
+        p = self.program
+        review = self.replay.reviews.get(p['review_id'])
+        if review and review.get('kind')=='fielding_highlights' and review.get('awaiting_ready'):
+            fresh = [r for r in self.reports.values() if now_ms()-r['received_ms']<=4000]
+            outputs = [r for r in fresh if r['role']=='obs'] or fresh
+            if outputs and all(r['mode']=='replay' and r['revision']==p['revision'] and r['state']=='paused' for r in outputs):
+                review['awaiting_ready'] = False
+                p.update(playing=True,position_ms=0,anchor_ms=now_ms(),revision=p['revision']+1)
 
     def router(self):
         router = APIRouter(prefix='/api/broadcast')

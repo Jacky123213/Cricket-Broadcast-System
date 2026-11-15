@@ -22,7 +22,7 @@ class Stream {
   removeTrack(track) { this.tracks=this.tracks.filter(item=>item!==track); }
 }
 function harness(batteryManager = null) {
-  const elements=new Map(), requests=[], sockets=[], peers=[], recordings=[],toasts=[];
+  const elements=new Map(), requests=[], sockets=[], peers=[], recordings=[],toasts=[],timers=new Map(),documentEvents=new Map(),windowEvents=new Map();let timerId=0;
   const element=key=>{if(!elements.has(key))elements.set(key,new Element());return elements.get(key);};
   element('#resolution').value='1280x720';element('#fps').value='30';element('#microphone').value='false';
   class Socket extends Element {
@@ -44,18 +44,39 @@ function harness(batteryManager = null) {
     constructor(id,stream){this.stream=stream;recordings.push(this);}
     async start(){} stop(){this.stopped=true;}
   }
-  const context={document:{querySelector:element,getElementById:id=>element('#'+id),createElement:()=>new Element(),body:new Element()},
+  const context={document:{querySelector:element,getElementById:id=>element('#'+id),createElement:()=>new Element(),body:new Element(),addEventListener:(name,fn)=>documentEvents.set(name,fn)},
     window:{DRS:{createClientId:()=> 'camera-id',showToast:text=>toasts.push(text),websocketUrl:path=>'wss://local'+path},isSecureContext:true,
-      DRSOptics:{create:async raw=>({stream:raw,close(){},set(){}})},DRSRecorder:Recorder,addEventListener(){}},
+      DRSOptics:{create:async raw=>({stream:raw,close(){},set(){}})},DRSRecorder:Recorder,addEventListener:(name,fn)=>windowEvents.set(name,fn)},
     localStorage:{getItem(){return null;},setItem(){}},navigator:{userAgent:'Test',mediaDevices:{
       async getUserMedia(constraints){requests.push(constraints);return new Stream(constraints.video===false?[new Track('audio')]:[new Track('video'),...(constraints.audio?[new Track('audio')]:[])]);},
       async enumerateDevices(){return [];},addEventListener(){}}},
-    WebSocket:Socket,RTCPeerConnection:Peer,setInterval(){},clearInterval(){},performance:{now:()=>0},fetch:async()=>({ok:true}),console};
+    WebSocket:Socket,RTCPeerConnection:Peer,setInterval(){},clearInterval(){},setTimeout:(fn,ms)=>{timers.set(++timerId,{fn,ms});return timerId;},clearTimeout:id=>timers.delete(id),performance:{now:()=>0},fetch:async()=>({ok:true}),console};
   if (batteryManager) context.navigator.getBattery=async()=>batteryManager;
   vm.createContext(context);vm.runInContext(fs.readFileSync('frontend/assets/battery.js','utf8'),context);
   vm.runInContext(fs.readFileSync('frontend/assets/camera.js','utf8'),context);
-  return {elements,requests,sockets,peers,recordings,toasts,context,element,run:code=>vm.runInContext(code,context)};
+  return {elements,requests,sockets,peers,recordings,toasts,timers,documentEvents,windowEvents,context,element,run:code=>vm.runInContext(code,context)};
 }
+test('server-requested heartbeat works without any timer, microphone or moving frames',async()=>{
+ const h=harness();await h.run('connect()');await h.sockets[0].open();await h.sockets[0].emit('message',{data:JSON.stringify({type:'registered'})});
+ assert.equal(h.sockets[0].sent[0].capabilities.server_heartbeat,true);assert.equal(h.sockets[0].sent[0].settings.microphone,false);
+ const count=h.recordings.length,prior=h.sockets[0].sent.at(-1).sequence;
+ await h.sockets[0].emit('message',{data:JSON.stringify({type:'heartbeat_request'})});
+ assert.ok(h.sockets[0].sent.at(-1).sequence>prior);assert.equal(h.recordings.length,count);assert.equal(h.requests.length,1);
+});
+
+test('lost camera socket retries but umpire and duplicate-slot disconnects stay disconnected',async()=>{
+ for(const code of [1006,4002,4000,4001,4400]){const h=harness();await h.run('connect()');await h.sockets[0].open();await h.sockets[0].emit('message',{data:JSON.stringify({type:'registered'})});h.sockets[0].readyState=3;
+  await h.sockets[0].emit('close',{code});assert.equal(h.timers.size,[1006,4002].includes(code)?1:0);
+  if(h.timers.size){await [...h.timers.values()][0].fn();await new Promise(setImmediate);assert.equal(h.sockets.length,2);}
+ }
+});
+
+test('returning to the camera sends a heartbeat; explicit disconnect cancels recovery',async()=>{
+ const h=harness();await h.run('connect()');await h.sockets[0].open();await h.sockets[0].emit('message',{data:JSON.stringify({type:'registered'})});
+ h.context.document.visibilityState='visible';const before=h.sockets[0].sent.length;h.documentEvents.get('visibilitychange')();assert.equal(h.sockets[0].sent.length,before+1);
+ h.sockets[0].readyState=3;await h.sockets[0].emit('close',{code:4002});assert.equal(h.timers.size,1);h.sockets[0].close=()=>{};await h.element('#disconnectButton').emit('click');assert.equal(h.timers.size,0);
+});
+
 test('battery sends registration and heartbeat telemetry without restarting capture',async()=>{
   const events=new Map();
   const manager={level:.66,charging:false,addEventListener:(name,fn)=>events.set(name,fn),removeEventListener(){}};

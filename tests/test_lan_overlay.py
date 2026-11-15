@@ -44,7 +44,8 @@ def test_overlay_and_umpire_use_same_lan_server_and_tls(tmp_path, secure):
         assert status["overlay_urls"] == info["overlay_urls"]
         assert status["certificate_url"] == ("/local-ca.crt" if secure else None)
         assert client.get("/overlay").status_code == 200
-        assert 'id="overlayAddress"' in client.get("/scoreboard").text
+        assert 'data-operator="connections"' in client.get("/connections").text
+        assert 'id="overlayAddress"' in client.get("/scoreboard?legacy=1").text
         assert "location.origin+'/overlay'" not in client.get("/control.js").text
 
 

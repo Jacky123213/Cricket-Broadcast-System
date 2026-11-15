@@ -231,3 +231,19 @@ class DeviceManager:
             except RuntimeError:
                 pass
         return len(stale)
+
+    async def request_heartbeats(self) -> None:
+        """Network events wake background tabs without relying on JS timers.
+
+        Sending is not evidence of life: only a reply updates last_seen.
+        Older camera clients keep their existing timer-based protocol.
+        """
+        async with self._lock:
+            devices = [d for d in self._devices.values()
+                       if d.capabilities.get('server_heartbeat') is True]
+        async def request(device):
+            try:
+                await asyncio.wait_for(device.websocket.send_json({'type':'heartbeat_request'}), 2)
+            except Exception:
+                pass  # The existing stale/closed-socket path handles failures.
+        await asyncio.gather(*(request(device) for device in devices))

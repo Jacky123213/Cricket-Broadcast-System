@@ -6,7 +6,7 @@ async function desktop(saved){
  w.setTimeout=()=>1;
  w.fetch=async url=>{requests.push(url);return {ok:true,json:async()=>({connected_cameras:1,score_packets:4,secure_context:true,camera_urls:['https://local/camera'],umpire_urls:['https://local/umpire'],overlay_urls:['https://local/overlay'],bluetooth_status:'Connected',sleep_prevention:'Active'})};};
  if(saved)w.localStorage.setItem('cricket.local-live-views.v1',saved);
- w.eval(read('frontend/desktop/desktop.js'));await settle();return {dom,w,d:w.document,requests,close:()=>w.close()};
+ w.eval(read('frontend/assets/operator-nav.js'));w.eval(read('frontend/desktop/desktop.js'));await settle();return {dom,w,d:w.document,requests,close:()=>w.close()};
 }
 test('hidden Replay Studio does not connect at launch; loaded sections and scoreboard drafts survive navigation',async()=>{
  const h=await desktop();try{

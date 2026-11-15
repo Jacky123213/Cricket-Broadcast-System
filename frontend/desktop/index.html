@@ -1,69 +1,16 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#111613">
-  <title>Backyard Cricket Studio</title>
-  <link rel="stylesheet" href="/desktop.css?build=__STUDIO_BUILD__">
-  <link rel="stylesheet" href="/static/app-theme.css?v=1.3.0">
-</head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cricket Broadcast System</title>
+<script src="/static/preferences.js?build=__STUDIO_BUILD__"></script><link rel="stylesheet" href="/static/app-theme.css?build=__STUDIO_BUILD__"><link rel="stylesheet" href="/static/operator-layout.css?build=__STUDIO_BUILD__"><link rel="stylesheet" href="/desktop.css?build=__STUDIO_BUILD__"></head>
 <body class="app-ui desktop-ui">
-  <aside class="rail">
-    <a class="wordmark" href="#home" data-view="home" aria-label="Backyard Cricket Studio home"><span>BC</span><strong>Backyard<br>Cricket</strong></a>
-    <nav aria-label="Application sections">
-      <button class="nav active" data-view="match-day"><span>●</span>Match Day</button>
-      <button class="nav" data-view="home"><span>⌂</span>Home</button>
-      <button class="nav" data-view="replay"><span>▶</span>Replay studio</button>
-      <button class="nav" data-view="scoreboard"><span>▤</span>Scoreboard</button>
-      <button class="nav" data-view="settings"><span>⚙</span>Settings</button>
-      <button class="nav" data-view="help"><span>?</span>Troubleshooting</button>
-    </nav>
-    <div class="local-live-control">
-      <label for="localLiveViews"><input id="localLiveViews" type="checkbox" checked aria-describedby="localLiveHint">Live views on this screen</label>
-      <p id="localLiveHint">Off stops this window's Match Day preview and Replay Studio. A local review will close. The server, cameras, iPad and OBS stay running; scoreboard drafts stay intact.</p>
-    </div>
-    <div class="rail-status"><i id="serverDot"></i><span id="serverText">Starting local server…</span></div>
-  </aside>
-
-  <main>
-    <section class="view framed active" id="view-match-day"><header class="frame-head"><div><p class="kicker">PRODUCTION DESK</p><h1>Match Day</h1></div><a href="/match-day" target="_blank" rel="noopener">Open in browser ↗</a></header><iframe id="matchDayFrame" data-live-src="/match-day" title="Match Day production controls" allow="autoplay"></iframe><div class="local-live-paused" hidden><h2>Local live views are off</h2><p>The Studio server is still running. Use your iPad for Match Day, or turn live views back on in the sidebar.</p></div></section>
-    <section class="view" id="view-home">
-      <header class="page-head"><div><p class="kicker">MATCH CONTROL</p><h1>Your ground, in one place.</h1><p class="lede">Run cameras, reviews and broadcast graphics from this PC. Phones and tablets only need a browser.</p></div><span class="version">Studio 1.5.1 · Overlay 0.7.2</span></header>
-      <div class="hero-grid">
-        <button class="launch-card replay" data-view="replay"><span class="number">01</span><div><p>DECISION REVIEW</p><h2>Replay Studio</h2><span>Connect field cameras, review incidents and inspect synchronized angles.</span></div><b>Open →</b></button>
-        <button class="launch-card score" data-view="scoreboard"><span class="number">02</span><div><p>LIVE GRAPHICS</p><h2>Scoreboard</h2><span>Receive Play-Cricket scores or operate the overlay manually.</span></div><b>Open →</b></button>
-      </div>
-      <div class="status-grid">
-        <article><span class="label">CAMERAS</span><strong id="cameraCount">0</strong><small>connected now</small></article>
-        <article><span class="label">SCORE FEED</span><strong id="scoreCount">0</strong><small>packets received</small></article>
-        <article><span class="label">SECURE SERVER</span><strong id="secureState">Checking</strong><small>required for mobile cameras</small></article>
-      </div>
-      <section class="connect-panel"><div><p class="kicker">QUICK CONNECT</p><h2>Bring a camera onto the field</h2><p>Open one of these links on an iPhone, iPad, Android device or Raspberry Pi connected to this Wi-Fi.</p></div><div id="cameraLinks" class="links"></div></section>
-    </section>
-
-    <section class="view framed" id="view-replay"><header class="frame-head"><div><p class="kicker">BACKYARD DRS 0.15.2</p><h1>Replay Studio</h1></div><a href="/umpire" target="_blank">Open in browser ↗</a></header><iframe id="replayFrame" data-live-src="/umpire" title="Replay Studio"></iframe><div class="local-live-paused" hidden><h2>Local live views are off</h2><p>Cameras and the iPad umpire console remain connected to Studio. Turn live views back on to review footage on this screen.</p></div></section>
-    <section class="view framed" id="view-scoreboard"><header class="frame-head"><div><p class="kicker">BROADCAST DESK · OVERLAY 0.7.2</p><h1>Scoreboard</h1></div><nav class="score-shortcuts" aria-label="Broadcast shortcuts"><button type="button" data-score-section="graphicsOnAir">Graphics</button><button type="button" data-score-section="wicketDetails">Wicket details</button><button type="button" data-score-section="statsEditor">Edit stats</button><button type="button" data-score-section="broadcastBranding">Broadcast logo</button><a href="/broadcast" target="_blank">Open broadcast ↗</a></nav></header><iframe id="scoreboardFrame" src="/scoreboard?build=__STUDIO_BUILD__" title="Scoreboard controls"></iframe></section>
-
-    <section class="view content" id="view-settings">
-      <header class="page-head"><div><p class="kicker">SETTINGS</p><h1>Connections & output</h1></div></header>
-      <div class="settings-grid">
-        <article><h2>Mobile umpire</h2><p>Use the umpire page from an iPad or another computer on the same network.</p><div id="umpireLinks" class="links"></div></article>
-        <article><h2>Broadcast output · another OBS PC</h2><p>Use the Studio PC's LAN address on the same Wi-Fi or Ethernet. HTTPS and certificate are shared with the umpire pages. Browser Source: Local file off, 1920 × 1080.</p><label for="overlayAddress">Studio network address</label><select id="overlayAddress"><option>Finding addresses…</option></select><a id="broadcastLink" href="/broadcast" target="_blank">Open camera + overlay output ↗</a><code id="overlayUrl">Loading…</code><button id="copyOverlay">Copy overlay URL</button><p><a id="overlayCertificate" href="/local-ca.crt" download>Download existing local CA certificate</a></p><p>Trust the public CA certificate on the OBS PC under the Windows user running OBS, then restart OBS. Never copy the private key files.</p></article>
-        <article><h2>Camera compatibility</h2><p>Camera pages now list the actual lenses reported by Safari, Chrome and Chromium after permission is granted. Start at 720p / 30 FPS.</p><a href="/camera" target="_blank">Open local camera page ↗</a></article>
-        <article><h2>Small camera hardware</h2><p>Raspberry Pi works through Chromium and a CSI/USB camera. ESP32/Arduino MJPEG cameras can supply a broadcast source, but cannot yet record the synchronized DRS buffer.</p><a href="/hardware" target="_blank">Hardware setup guide ↗</a></article>
-      </div>
-    </section>
-
-    <section class="view content" id="view-help">
-      <header class="page-head"><div><p class="kicker">TROUBLESHOOTING</p><h1>Match-day checks</h1><p class="lede">Work from the top down. Most connection faults are certificate, Wi-Fi isolation or camera permission issues.</p></div></header>
-      <div class="diagnostics"><article><span>SERVER</span><strong id="diagServer">Checking…</strong></article><article><span>BLUETOOTH</span><strong id="diagBluetooth">Checking…</strong></article><article><span>WINDOWS SLEEP</span><strong id="diagSleep">Checking…</strong></article></div>
-      <details open><summary>Camera does not appear</summary><ol><li>Put the PC and device on the same normal Wi-Fi network.</li><li>Install and trust the local certificate on Apple/Android.</li><li>Open the camera page, allow camera permission, then choose the required lens.</li><li>Avoid guest Wi-Fi and VPNs that block local devices.</li></ol></details>
-      <details><summary>Replay is buffering or has gaps</summary><p>Start with 720p / 30 FPS, keep camera pages visible and test for at least 70 seconds. Reduce the number of cameras before increasing quality.</p></details>
-      <details><summary>Scoreboard phone cannot find the PC</summary><p>Use Generic (Enhanced) in Play-Cricket Scorer. Bluetooth must support peripheral mode. A growing packet count proves that data is arriving.</p></details>
-      <details><summary>Overlay and DRS together</summary><p>The same umpire camera can remain connected to DRS while its live view is used for production. Add the scoreboard overlay above that video source in OBS. DRS recording and overlay graphics share this server but remain separate layers.</p></details>
-    </section>
-  </main>
-  <script src="/static/sections.js?v=1.3.0"></script><script src="/desktop.js?build=__STUDIO_BUILD__"></script>
-</body>
-</html>
+<aside id="desktopRail"></aside><main id="desktopMain">
+<section class="view framed active" id="view-match-day"><iframe id="matchDayFrame" data-live-src="/match-day" title="Match Day" allow="autoplay"></iframe><div class="local-live-paused" hidden><p class="eyebrow">SERVER RUNNING</p><h1>Live views on this screen are off</h1><p>Control Match Day from your iPad. Cameras, scoring, recording and OBS keep running.</p><button type="button" data-enable-live class="primary">Enable views on this screen</button><a data-lan-page="/match-day" href="/match-day" target="_blank" rel="noopener">Open on another device</a></div></section>
+<section class="view framed" id="view-replay"><iframe id="replayFrame" data-live-src="/umpire" title="Replay Studio" allow="autoplay"></iframe><div class="local-live-paused" hidden><p class="eyebrow">SERVER RUNNING</p><h1>Live views on this screen are off</h1><p>Control Replay Studio from your iPad. Cameras, scoring, recording and OBS keep running.</p><button type="button" data-enable-live class="primary">Enable views on this screen</button><a data-lan-page="/umpire" href="/umpire" target="_blank" rel="noopener">Open on another device</a></div></section>
+<section class="view framed" id="view-scoreboard"><iframe id="scoreboardFrame" data-page-src="/scoreboard?build=__STUDIO_BUILD__" title="Scoreboard" allow="autoplay"></iframe></section>
+<section class="view framed" id="view-match-setup"><iframe id="setupFrame" data-page-src="/match-setup" title="Match Setup" allow="autoplay"></iframe></section>
+<section class="view framed" id="view-teams"><iframe id="teamsFrame" data-page-src="/teams" title="Teams & Players" allow="autoplay"></iframe></section>
+<section class="view framed" id="view-graphics"><iframe id="graphicsFrame" data-page-src="/graphics" title="Graphics" allow="autoplay"></iframe></section>
+<section class="view framed" id="view-highlights"><iframe id="highlightsFrame" data-page-src="/highlights" title="Highlights" allow="autoplay"></iframe></section>
+<section class="view framed" id="view-connections"><iframe id="connectionsFrame" data-page-src="/connections" title="Connections" allow="autoplay"></iframe></section>
+<section class="view framed" id="view-settings"><iframe id="settingsFrame" data-page-src="/settings" title="Settings" allow="autoplay"></iframe></section>
+<section class="view framed" id="view-help"><iframe id="helpFrame" data-page-src="/help" title="Help" allow="autoplay"></iframe></section>
+</main><script id="studioConnection" type="application/json">__STUDIO_CONNECTION__</script><script src="/static/operator-nav.js?build=__STUDIO_BUILD__"></script><script src="/desktop.js?build=__STUDIO_BUILD__"></script></body></html>

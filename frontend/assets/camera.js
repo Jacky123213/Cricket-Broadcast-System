@@ -17,6 +17,9 @@ let previewStream = null;
 let optics=null;
 let mediaBusy=false;
 let intentionalDisconnect = false;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+let reconnectAllowed = false;
 let rollingRecorder = null;
 let recordingGeneration = 0;
 let microphoneBusy = false;
@@ -88,10 +91,13 @@ async function syncMicrophone() {
   }
 }
 
-const deviceId = localStorage.getItem("drs_device_id") || createClientId();
-localStorage.setItem("drs_device_id", deviceId);
-document.querySelector("#cameraName").value = localStorage.getItem("drs_camera_name") || `Camera ${deviceId.slice(0, 4).toUpperCase()}`;
-document.querySelector("#cameraRole").value = localStorage.getItem("drs_camera_role") || "UMPIRE_POV";
+const cameraSlot = (()=>{try{const slot=new URLSearchParams(location.search).get('slot');return ['1','2','3'].includes(slot)?slot:'';}catch{return '';}})();
+// Named desktop slots persist independently. Ordinary phone/tablet tabs keep
+// an identity for this tab only, rather than replacing another camera tab.
+const cameraPreferences={getItem:key=>localStorage.getItem(key+(cameraSlot?'_slot_'+cameraSlot:'')),setItem:(key,value)=>localStorage.setItem(key+(cameraSlot?'_slot_'+cameraSlot:''),value)};
+const deviceId = (()=>{try{const storage=cameraSlot?cameraPreferences:sessionStorage;let value=storage.getItem('drs_device_id');if(!value){value=createClientId();storage.setItem('drs_device_id',value);}return value;}catch{return createClientId();}})();
+document.querySelector("#cameraName").value = cameraPreferences.getItem("drs_camera_name") || (cameraSlot?`PC camera ${cameraSlot}`:`Camera ${deviceId.slice(0, 4).toUpperCase()}`);
+document.querySelector("#cameraRole").value = cameraPreferences.getItem("drs_camera_role") || ({'1':'UMPIRE_POV','2':'CREASE_LEFT','3':'CREASE_RIGHT'}[cameraSlot]) || "UMPIRE_POV";
 document.querySelector("#secureWarning").hidden = window.isSecureContext;
 
 function setStatus(online, text) {
@@ -131,7 +137,7 @@ async function ensureMedia() {
   try {
     const raw=await navigator.mediaDevices.getUserMedia(selectedConstraints());
     await refreshCameraDevices(raw.getVideoTracks()[0]?.getSettings?.().deviceId);
-    optics=await window.DRSOptics.create(raw,document.querySelector('#cameraZoom'),document.querySelector('#zoomStatus'));
+    optics=await window.DRSOptics.create(raw,document.querySelector('#cameraZoom'),document.querySelector('#zoomStatus'),{directCapture:Boolean(cameraSlot)});
     previewStream=optics.stream;
     watchMicrophones(previewStream);
   } catch(e){throw Error(e.name==='OverconstrainedError'?'Selected camera unavailable. Choose the other camera.':e.message);}
@@ -257,6 +263,7 @@ async function handleSignal(message) {
 async function connect() {
   if(mediaBusy||socket?.readyState===WebSocket.OPEN||socket?.readyState===WebSocket.CONNECTING)return;
   intentionalDisconnect = false;
+  clearTimeout(reconnectTimer);reconnectTimer=null;
   const name = document.querySelector("#cameraName").value.trim();
   const role = document.querySelector("#cameraRole").value;
   if (!name) return;
@@ -266,8 +273,8 @@ async function connect() {
     showToast(error.message);
     return;
   }
-  localStorage.setItem("drs_camera_name", name);
-  localStorage.setItem("drs_camera_role", role);
+  cameraPreferences.setItem("drs_camera_name", name);
+  cameraPreferences.setItem("drs_camera_role", role);
   setStatus(false, "Connecting…");
   const nextSocket = new WebSocket(websocketUrl("/ws/camera"));
   socket = nextSocket;
@@ -285,6 +292,7 @@ async function connect() {
         microphone: liveMicrophones().length > 0,
       },
       capabilities: {
+        server_heartbeat: true,
         secure_context: window.isSecureContext,
         media_devices: Boolean(navigator.mediaDevices),
         webrtc: Boolean(window.RTCPeerConnection),
@@ -297,6 +305,7 @@ async function connect() {
     if (socket !== nextSocket) return;
     const message = JSON.parse(event.data);
     if (message.type === "registered") {
+      reconnectAttempts=0;reconnectAllowed=true;
       setStatus(true, "Camera live");
       refreshVideoStatus();
       startReplayRecording();
@@ -306,6 +315,7 @@ async function connect() {
       sendHeartbeat();
       heartbeatTimer = setInterval(sendHeartbeat, interval);
     }
+    if (message.type === 'heartbeat_request') sendHeartbeat();
     if (message.type === "heartbeat_ack") {
       const started = heartbeatSentAt.get(message.sequence);
       if (started) {
@@ -326,8 +336,8 @@ async function connect() {
     if (message.type === "configuration") {
       document.querySelector("#cameraName").value = message.name;
       document.querySelector("#cameraRole").value = message.role;
-      localStorage.setItem("drs_camera_name", message.name);
-      localStorage.setItem("drs_camera_role", message.role);
+      cameraPreferences.setItem("drs_camera_name", message.name);
+      cameraPreferences.setItem("drs_camera_role", message.role);
       document.querySelector("#connectedName").textContent = message.name;
       showToast("Camera configuration updated by umpire");
     }
@@ -341,7 +351,13 @@ async function connect() {
     closePeers();
     setStatus(false, "Not connected");
     document.querySelector("#streamStatusValue").textContent = "OFFLINE";
-    if (!intentionalDisconnect) showToast(event.reason || "Connection lost — reconnect when ready");
+    // Never fight an umpire disconnect or another tab owning this same slot.
+    reconnectAllowed=!intentionalDisconnect&&![4000,4001,4400].includes(event.code);
+    if (reconnectAllowed) {
+      const seconds=Math.min(15,2**Math.min(4,++reconnectAttempts));
+      setStatus(false,'Reconnecting in '+seconds+' s…');
+      reconnectTimer=setTimeout(()=>{reconnectTimer=null;if(reconnectAllowed&&!intentionalDisconnect)connect();},seconds*1000);
+    } else if (!intentionalDisconnect) showToast(event.reason || 'Camera disconnected');
   });
   socket.addEventListener("error", () => { if (socket === nextSocket) showToast("Could not reach the DRS server"); });
 }
@@ -350,6 +366,7 @@ function sendHeartbeat() {
   if (socket?.readyState !== WebSocket.OPEN) return;
   const sequence = ++heartbeatSequence;
   heartbeatSentAt.set(sequence, performance.now());
+  if(heartbeatSentAt.size>30)heartbeatSentAt.delete(heartbeatSentAt.keys().next().value);
   socket.send(JSON.stringify({ type: "heartbeat", sequence, client_time_ms: Date.now(), battery }));
 }
 
@@ -358,13 +375,21 @@ document.querySelector("#connectButton").addEventListener("click", connect);
 document.querySelector("#previewButton").addEventListener("click", testCamera);
 document.querySelector("#disconnectButton").addEventListener("click", () => {
   intentionalDisconnect = true;
+  reconnectAllowed=false;clearTimeout(reconnectTimer);reconnectTimer=null;
   socket?.close(1000, "Device disconnected");
 });
 window.addEventListener("beforeunload", () => {
+  intentionalDisconnect=true;reconnectAllowed=false;clearTimeout(reconnectTimer);
   stopBattery?.();
   closePeers();
   optics?.close();
   previewStream?.getTracks().forEach(track => track.stop());
+});
+window.addEventListener('online',()=>{if(reconnectAllowed&&socket?.readyState!==WebSocket.OPEN)connect();});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible')return;
+  if(socket?.readyState===WebSocket.OPEN)sendHeartbeat();
+  else if(reconnectAllowed&&!intentionalDisconnect)connect();
 });
 window.__drsCameraReady = true;
 
@@ -408,19 +433,19 @@ document.getElementById('stopAudio').onclick=()=>{stopAudio?.();stopAudio=null;d
 window.addEventListener('beforeunload',()=>stopAudio?.());
 
 const facing=document.querySelector('#cameraFacing');
-facing.value=localStorage.getItem('drs_facing')==='user'?'user':'environment';
-facing.addEventListener('change',()=>{localStorage.setItem('drs_facing',facing.value);testCamera();});
+facing.value=cameraPreferences.getItem('drs_facing')==='user'?'user':'environment';
+facing.addEventListener('change',()=>{cameraPreferences.setItem('drs_facing',facing.value);testCamera();});
 const cameraDevice=document.querySelector('#cameraDevice');
 async function refreshCameraDevices(activeId=''){
  if(!navigator.mediaDevices?.enumerateDevices)return;
  const devices=(await navigator.mediaDevices.enumerateDevices()).filter(item=>item.kind==='videoinput');
- const saved=activeId||localStorage.getItem('drs_camera_device')||'';
+ const saved=activeId||cameraPreferences.getItem('drs_camera_device')||'';
  cameraDevice.innerHTML='<option value="">Automatic (recommended)</option>';
  devices.forEach((item,index)=>{const option=document.createElement('option');option.value=item.deviceId;option.textContent=item.label||`Camera ${index+1}`;cameraDevice.append(option);});
  if([...cameraDevice.options].some(option=>option.value===saved))cameraDevice.value=saved;
  document.querySelector('#cameraDeviceNote').textContent=devices.length?`${devices.length} camera${devices.length===1?'':'s'} available. Names differ between Apple, Android and Raspberry Pi browsers.`:'Camera names appear after permission is granted.';
 }
-cameraDevice.addEventListener('change',()=>{localStorage.setItem('drs_camera_device',cameraDevice.value);testCamera();});
+cameraDevice.addEventListener('change',()=>{cameraPreferences.setItem('drs_camera_device',cameraDevice.value);testCamera();});
 navigator.mediaDevices?.addEventListener?.('devicechange',()=>refreshCameraDevices());
 refreshCameraDevices();
 document.querySelector('#resetZoom').onclick=()=>optics?.set(1);

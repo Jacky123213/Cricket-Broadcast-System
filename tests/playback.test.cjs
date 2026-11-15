@@ -64,6 +64,13 @@ test('continuous loading keeps the outgoing decoder visible and playing until re
  assert.equal(p.video,standby.video);assert.equal(old.paused,true);assert.equal(old.hidden,true);p.destroy();
 });
 
+test('preloaded finite review prepares its first frame and retains the outgoing frame during decoder handover',async()=>{
+ const p=new AnglePlayer([clips[0]],()=>new Video(),()=>{},{seamless:true});assert.equal(await p.prepare(3000),true);assert.equal(p.ready,true);assert.equal(p.video.currentTime,3);
+ p.update(3000,true);await settle();const old=p.video,standby=p.slots.find(s=>s.video!==old);p.clips=clips;standby.video.readyState=1;
+ p.update(5100,true);await settle();assert.equal(old.hidden,false);assert.equal(old.paused,false);assert.equal(p.waiting,true);
+ standby.video.readyState=4;standby.video.dispatchEvent(new Event('loadeddata'));await settle();assert.equal(p.video,standby.video);assert.equal(p.video.hidden,false);p.destroy();
+});
+
 test('an overlapping arrival cannot replace a standby decoder while it is still preparing',async()=>{
  const p=new AnglePlayer([clips[0]],()=>new Video(),()=>{},{continuous:true});
  try{

@@ -1,0 +1,32 @@
+/* Shared structure for the ten operator sections. Dark and light use the same DOM. */
+:root {--rail-width:208px;--app-input:#101612;--app-hover:#242f27;--app-selected:#344322;--app-accent-text:#10170c;--app-panel-2:#1b231e;--app-danger:#ff9292;--app-shadow:0 2px 12px #0001;--app-control-size:14px}
+:root[data-theme="light"] {--app-bg:#f4f5f1;--app-panel:#fff;--app-line:#ccd3cc;--app-text:#17251d;--app-muted:#66736a;--app-accent:#235d41;--app-input:#fff;--app-hover:#e9eee7;--app-selected:#dce9d8;--app-accent-text:#fff;--app-panel-2:#edf1eb;--app-danger:#a32930;--panel-2:var(--app-panel-2);--red-dark:#19492f}
+:root[data-text="large"] {--app-control-size:16px}
+* {box-sizing:border-box}
+.app-ui {margin:0;font-size:var(--app-control-size);line-height:1.45}
+.app-ui h1 {font-size:28px;margin:0;letter-spacing:-.035em}.app-ui h2 {font-size:18px;margin:0 0 14px}.app-ui h3 {font-size:15px}
+.app-ui button,.app-ui .button,.app-ui .btn,.app-ui input,.app-ui select,.app-ui textarea {font-size:var(--app-control-size);background:var(--app-input);color:var(--app-text);border-color:var(--app-line)}
+.app-ui button,.app-ui .button {padding:9px 14px;min-height:40px;cursor:pointer}
+.app-ui button:disabled {opacity:.48;cursor:not-allowed}.app-ui button:hover,.app-ui .button:hover {background:var(--app-hover);border-color:var(--app-muted)}
+.app-ui .primary,.app-ui .btn-primary {background:var(--app-accent);color:var(--app-accent-text);border-color:var(--app-accent)}
+.app-ui .primary:hover,.app-ui .btn-primary:hover {background:var(--app-accent);color:var(--app-accent-text);filter:brightness(1.08)}
+.app-ui input,.app-ui select,.app-ui textarea {width:100%;padding:9px 10px;border-radius:5px}.app-ui input[type=checkbox],.app-ui input[type=radio] {width:auto;min-height:0}.app-ui input[type=color] {padding:4px;height:40px}.app-ui label {display:grid;gap:6px;font-size:13px}
+.app-ui .check {display:flex;align-items:center;gap:9px}.app-ui p {line-height:1.5}.app-ui .hint {font-size:12px}.app-ui a {text-underline-offset:3px}
+.app-ui code {overflow-wrap:anywhere;white-space:normal}.app-ui [hidden] {display:none!important}
+.operator-rail {position:fixed;inset:0 auto 0 0;width:var(--rail-width);display:flex;flex-direction:column;background:var(--app-panel);border-right:1px solid var(--app-line);padding:22px 12px;overflow:auto;z-index:30}
+.operator-brand {display:flex;gap:11px;align-items:center;text-decoration:none!important;color:var(--app-text)!important;margin:0 6px 20px}.operator-brand>span {display:grid;place-items:center;background:var(--app-accent);color:var(--app-accent-text);border-radius:9px;width:40px;height:40px;font-weight:850;font-size:19px}.operator-brand strong {font-size:14px;line-height:1.2}
+.nav-group {padding:12px 0;border-top:1px solid var(--app-line)}.nav-group>span {display:block;font-size:10px;letter-spacing:.12em;font-weight:700;color:var(--app-muted);margin:0 12px 8px}
+.operator-rail .nav {display:flex;align-items:center;gap:12px;width:100%;padding:9px 12px;min-height:40px;background:none;border:0;border-radius:5px;text-decoration:none;text-align:left;color:var(--app-muted);font-size:14px;font-weight:550;margin:2px 0}
+.operator-rail .nav:hover {background:var(--app-hover)}.operator-rail .nav.active {background:var(--app-accent);color:var(--app-accent-text);box-shadow:none}
+.operator-rail svg {width:19px;height:19px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+.rail-status {display:flex;gap:8px;align-items:center;margin:18px 6px 0;font-size:11px;color:var(--app-muted)}.rail-status i {width:7px;height:7px;background:#ba454a;border-radius:100%;flex-shrink:0}.rail-status i.online {background:#8ed54c}
+.studio-connection {margin:12px 6px 0;color:var(--app-muted);font-size:10px}.studio-connection strong,.studio-connection small {display:block;overflow-wrap:anywhere}.studio-connection strong {color:var(--app-text);font-size:12px}
+.local-live-control {padding:14px 6px 0;border-top:1px solid var(--app-line);margin-top:auto}.local-live-control label {font-size:12px;display:flex;align-items:center;gap:8px}.local-live-control p {font-size:10px;margin:6px 0 0;color:var(--app-muted)}
+.standalone-operator {padding-left:var(--rail-width)!important}.standalone-operator.workspace-ui>main {margin:0}.operator-menu {display:none}
+.app-ui .topbar,.app-ui .desk-nav a,.app-ui .server-address,.app-ui code,.app-ui .stat,.app-ui .status-pill,.app-ui .toast,.app-ui .studio-state,.app-ui .angle-toolbar,.app-ui .angle-header,.app-ui .capture-zoom-dock,.app-ui .transport-dock,.app-ui .focus-audio {background:var(--app-panel);border-color:var(--app-line)}
+.app-ui .angle-badge,.app-ui #programSlot .angle-badge {background:var(--app-panel-2)}
+:root[data-theme="light"] .app-ui .panel,:root[data-theme="light"] .app-ui .card,:root[data-theme="light"] .app-ui .message-row {background:var(--app-panel)}
+.app-ui .camera-tile,.app-ui .preview-empty,.app-ui #previewEmpty,.app-ui #programEmpty {background:#0b100d;color:#b8c4bc}
+@media(pointer:coarse) {.app-ui button,.app-ui .button,.app-ui select,.app-ui input:not([type=checkbox]):not([type=radio]):not([type=range]) {min-height:48px;font-size:16px}.operator-rail .nav {min-height:48px}}
+@media(max-width:1050px) {:root{--rail-width:182px}.operator-rail {padding:16px 9px}.operator-brand strong{font-size:12px}.operator-rail .nav{font-size:13px;gap:9px}}
+@media(max-width:760px) {:root{--rail-width:208px}.standalone-operator {padding-left:0!important;padding-top:54px!important}.standalone-operator>.operator-rail {transform:translateX(-100%);transition:transform .15s}.standalone-operator.nav-open>.operator-rail {transform:none;box-shadow:0 0 0 100vw #0006}.operator-menu {display:block;position:fixed;top:8px;right:14px;z-index:40;background:var(--app-panel)!important}.app-ui h1{font-size:24px}}

@@ -14,6 +14,6 @@
   for(const type of ['touchend','touchcancel'])viewport.addEventListener(type,()=>gesture=null);
   viewport.addEventListener('pointerdown',e=>{if(e.target.closest('button,input,select,label,.focus-audio'))return;if(e.pointerType!=='mouse'||zoom===1)return;gesture={px:e.clientX,py:e.clientY,x,y};viewport.setPointerCapture(e.pointerId);});
   viewport.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&gesture?.px!==undefined){x=gesture.x+e.clientX-gesture.px;y=gesture.y+e.clientY-gesture.py;apply();}});
-  viewport.addEventListener('pointerup',()=>gesture=null);return {reset:()=>set(1)};
+  viewport.addEventListener('pointerup',()=>gesture=null);return {reset:()=>set(1),state:()=>({zoom,x:zoom>1&&viewport.clientWidth?Math.max(0,Math.min(1,.5-x/(viewport.clientWidth*(zoom-1)))):.5,y:zoom>1&&viewport.clientHeight?Math.max(0,Math.min(1,.5-y/(viewport.clientHeight*(zoom-1)))):.5,aspect:viewport.clientWidth&&viewport.clientHeight?Math.max(.1,Math.min(10,viewport.clientWidth/viewport.clientHeight)):16/9})};
  };
 })();
