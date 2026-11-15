@@ -1,4 +1,4 @@
-# Operator interface · 1.10.0-rc.1
+# Operator interface · 1.10.0-rc.2
 
 The desktop app and standalone iPad control pages share ten sections. The host,
 port, HTTPS certificate and existing camera/umpire/broadcast URLs are unchanged.
@@ -33,6 +33,12 @@ Studio viewers when off. A private local review closes; server/camera/Bluetooth/
 OBS operation continues. Saved settings and drafts in other sections remain.
 
 ## Teams versus playing lineups
+
+To delete a saved team, select it in **Teams & Players**, press **Delete team** and
+confirm its name. This removes its saved colours/logo, roster and playing-lineup
+selections. The button explains when a team is protected: switch out a team selected
+in Match Setup, clear its on-air graphic, or start a new match if it appears in this
+match's recorded innings. Deletion keeps current scores, innings and other teams.
 
 Save a reusable roster in Teams & Players. Then select this match's players under
 Match Setup → Playing lineups, separately for each side, and save each selection.

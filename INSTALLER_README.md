@@ -1,4 +1,7 @@
-# Cricket Broadcast System 1.10.0-rc.1 — Windows prerelease
+# Cricket Broadcast System 1.10.0-rc.2 — Windows prerelease
+
+This update adds Delete team under Teams & Players, with confirmation and protection
+for current-match and on-air teams. Close Studio before installing the update.
 
 This Windows installer candidate includes all changes since published 1.7.0-rc.2.
 See OPERATOR_UI_GUIDE.md for the ten-section interface, dark/light preference,

@@ -47,7 +47,9 @@ def package(root: Path):
             bundled=output/'CricketBroadcastSystem'/'_internal'/row['path']
             if not bundled.is_file() or hashlib.sha256(bundled.read_bytes()).hexdigest()!=row['sha256']:
                 raise RuntimeError('Source/bundle mismatch: '+row['path'])
-    manifest={'version':APP_VERSION,'windows_version':APP_VERSION.split('-')[0]+'.1','installer_sha256':hashlib.sha256(setup.read_bytes()).hexdigest(),'private_data_included':False,'hash_note':'sha256 matches raw source ZIP/bundle bytes; git_sha256 allows the repository’s LF text normalisation.','files':records}
+    base, marker, candidate = APP_VERSION.partition('-rc.')
+    windows_version = base+'.'+(candidate if marker and candidate.isdigit() else '0')
+    manifest={'version':APP_VERSION,'windows_version':windows_version,'installer_sha256':hashlib.sha256(setup.read_bytes()).hexdigest(),'private_data_included':False,'hash_note':'sha256 matches raw source ZIP/bundle bytes; git_sha256 allows the repository’s LF text normalisation.','files':records}
     (staging/'SOURCE_MANIFEST.json').write_text(json.dumps(manifest,indent=2),'utf-8')
     archive=output/f'CricketBroadcastSystem-{APP_VERSION}-source.zip'
     with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:

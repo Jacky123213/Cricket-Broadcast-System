@@ -1,7 +1,7 @@
 {
-  "version": "1.10.0-rc.1",
-  "windows_version": "1.10.0.1",
-  "installer_sha256": "87b7e2b58fe0c224a4450b7e42bae6fdeb12e86507b1a46b6ed40163969a6c39",
+  "version": "1.10.0-rc.2",
+  "windows_version": "1.10.0.2",
+  "installer_sha256": "f44391d216bb02df604b3362bcd9e62706d71d109a4b26c5e96fc87a9bedd6f8",
   "private_data_included": false,
   "hash_note": "sha256 matches raw source ZIP/bundle bytes; git_sha256 allows the repository\u2019s LF text normalisation.",
   "files": [
@@ -19,9 +19,9 @@
     },
     {
       "path": "BUILD_VERIFICATION.md",
-      "size": 24448,
-      "sha256": "3c9f03a410f530fab3f7e12cb0bfa3e9cc2d6b73b500ecc5fd883ca588862019",
-      "git_sha256": "3c9f03a410f530fab3f7e12cb0bfa3e9cc2d6b73b500ecc5fd883ca588862019"
+      "size": 26292,
+      "sha256": "51e3f59fd085434a3cdbc4f722395ee1be590d32fb6fe7bc20741c33f9b2c94a",
+      "git_sha256": "51e3f59fd085434a3cdbc4f722395ee1be590d32fb6fe7bc20741c33f9b2c94a"
     },
     {
       "path": "CAMERA_CONTROLS_0_14_1.md",
@@ -403,15 +403,15 @@
     },
     {
       "path": "frontend/operator/workspace.css",
-      "size": 9614,
-      "sha256": "c3b1facceae6f37f87b8ae042cefb36be822fa67e82185b8789218473a8ac820",
-      "git_sha256": "c3b1facceae6f37f87b8ae042cefb36be822fa67e82185b8789218473a8ac820"
+      "size": 9700,
+      "sha256": "61256515a09c50a9171f3e7c3ef1ecc7e34d5df71f893f53d75a314174b2f4d1",
+      "git_sha256": "61256515a09c50a9171f3e7c3ef1ecc7e34d5df71f893f53d75a314174b2f4d1"
     },
     {
       "path": "frontend/operator/workspace.js",
-      "size": 58887,
-      "sha256": "d9a545fe2103f16b9d6b7abed7b8a309827c5b35a7f0c34510cba056177b830b",
-      "git_sha256": "d9a545fe2103f16b9d6b7abed7b8a309827c5b35a7f0c34510cba056177b830b"
+      "size": 60990,
+      "sha256": "8f019873f5d614e0d5c0dd461b32a9f89c22f11c37c180bff6ca19ca60dc4134",
+      "git_sha256": "8f019873f5d614e0d5c0dd461b32a9f89c22f11c37c180bff6ca19ca60dc4134"
     },
     {
       "path": "frontend/scoreboard/control.html",
@@ -493,9 +493,9 @@
     },
     {
       "path": "INSTALLER_README.md",
-      "size": 9274,
-      "sha256": "403552d5f1373a803f6c841eb287fb40d265fe813272aa2cfe8533dea24f162f",
-      "git_sha256": "403552d5f1373a803f6c841eb287fb40d265fe813272aa2cfe8533dea24f162f"
+      "size": 9439,
+      "sha256": "84dd28b755720808e731206408906411824de08f45b2c72ccbfee10e873a03f5",
+      "git_sha256": "84dd28b755720808e731206408906411824de08f45b2c72ccbfee10e873a03f5"
     },
     {
       "path": "INSTALLER_TEST_CHECKLIST.md",
@@ -517,9 +517,9 @@
     },
     {
       "path": "OPERATOR_UI_GUIDE.md",
-      "size": 4184,
-      "sha256": "d1a895d6ca4ccd319f68aa60bf398a4f0e5b610fead0ea27c8e01fac650fcae7",
-      "git_sha256": "d1a895d6ca4ccd319f68aa60bf398a4f0e5b610fead0ea27c8e01fac650fcae7"
+      "size": 4602,
+      "sha256": "e18e45292623f1955dc5aea4704bad191f0f315d25353c579046869053d63fb0",
+      "git_sha256": "e18e45292623f1955dc5aea4704bad191f0f315d25353c579046869053d63fb0"
     },
     {
       "path": "OVERLAY_GUIDE.md",
@@ -530,8 +530,8 @@
     {
       "path": "packaging/CricketBroadcastSystem.iss",
       "size": 4998,
-      "sha256": "2468bb8aa3e79d2bdb2be30e5569ff6e889d387d973cc3ca6cb2c3fba528d2fb",
-      "git_sha256": "2468bb8aa3e79d2bdb2be30e5569ff6e889d387d973cc3ca6cb2c3fba528d2fb"
+      "sha256": "6d4846489a67c73ca1993b3f6cca6838a28efd1d4b4afa3eed3986222b77395e",
+      "git_sha256": "6d4846489a67c73ca1993b3f6cca6838a28efd1d4b4afa3eed3986222b77395e"
     },
     {
       "path": "packaging/CricketBroadcastSystem.spec",
@@ -541,9 +541,9 @@
     },
     {
       "path": "packaging/installer-info.txt",
-      "size": 3247,
-      "sha256": "bdd03ccce99a7b97b4ddcf20b1dff3ab8e525b14316500e99de6b684ba2a7d3e",
-      "git_sha256": "bdd03ccce99a7b97b4ddcf20b1dff3ab8e525b14316500e99de6b684ba2a7d3e"
+      "size": 3474,
+      "sha256": "6b37052d6eff739c0870c1e28b30dc6f46e6f6f2817295795b30f20f677c3c78",
+      "git_sha256": "6b37052d6eff739c0870c1e28b30dc6f46e6f6f2817295795b30f20f677c3c78"
     },
     {
       "path": "packaging/requirements-lock.txt",
@@ -554,14 +554,14 @@
     {
       "path": "packaging/version_info.txt",
       "size": 705,
-      "sha256": "b7b54a281a87db81daa9317da9a6290686e32acdc6481fe3ca6e445bf5c3314c",
-      "git_sha256": "b7b54a281a87db81daa9317da9a6290686e32acdc6481fe3ca6e445bf5c3314c"
+      "sha256": "0c08f761960745be11c335492c398afb65f7b74cd97ab8945584545713c73510",
+      "git_sha256": "0c08f761960745be11c335492c398afb65f7b74cd97ab8945584545713c73510"
     },
     {
       "path": "README.md",
-      "size": 11263,
-      "sha256": "05a480610e32b777e6bea2affbe7236029f61550a3d0c80209ee3e93e52e167a",
-      "git_sha256": "05a480610e32b777e6bea2affbe7236029f61550a3d0c80209ee3e93e52e167a"
+      "size": 11479,
+      "sha256": "d60c4c5e35050cee11d23c18687c94abfb567777de05387746fdf70e17630e3f",
+      "git_sha256": "d60c4c5e35050cee11d23c18687c94abfb567777de05387746fdf70e17630e3f"
     },
     {
       "path": "RELEASE_0_15_2.md",
@@ -580,6 +580,12 @@
       "size": 3472,
       "sha256": "890f0890407a06bea0c35c14fbedea46eab7e6bb5133f1439beaee3d72fe5f2b",
       "git_sha256": "890f0890407a06bea0c35c14fbedea46eab7e6bb5133f1439beaee3d72fe5f2b"
+    },
+    {
+      "path": "RELEASE_1_10_0_RC2.md",
+      "size": 1302,
+      "sha256": "181de68c44a90634492157a2d41c59d88e0db7e3a042699c18e14a553940994b",
+      "git_sha256": "181de68c44a90634492157a2d41c59d88e0db7e3a042699c18e14a553940994b"
     },
     {
       "path": "RELEASE_1_1_0.md",
@@ -721,9 +727,9 @@
     },
     {
       "path": "scripts/operator_ui_check.py",
-      "size": 12879,
-      "sha256": "481baf16976997a13ac11cec9db6d6b45fffd022985e17f76df4b794a1bdff79",
-      "git_sha256": "481baf16976997a13ac11cec9db6d6b45fffd022985e17f76df4b794a1bdff79"
+      "size": 15700,
+      "sha256": "361cbb424f0e39dc89102bd78e2c608a4fc9d129a637e8a5fa8581a74dd94f09",
+      "git_sha256": "361cbb424f0e39dc89102bd78e2c608a4fc9d129a637e8a5fa8581a74dd94f09"
     },
     {
       "path": "scripts/pack_ui_check.py",
@@ -739,9 +745,9 @@
     },
     {
       "path": "scripts/package_source.py",
-      "size": 3654,
-      "sha256": "6e898140bd2de88b90c5aa36367bd75b3a405bf3c6b8a852120432f391b0b7df",
-      "git_sha256": "6e898140bd2de88b90c5aa36367bd75b3a405bf3c6b8a852120432f391b0b7df"
+      "size": 3785,
+      "sha256": "212eb9c8bde09c7108d46cd91271718bbe5e115e60af89a28e5d4cb8307d7d73",
+      "git_sha256": "212eb9c8bde09c7108d46cd91271718bbe5e115e60af89a28e5d4cb8307d7d73"
     },
     {
       "path": "scripts/preview_broadcast.py",
@@ -800,8 +806,8 @@
     {
       "path": "server/build_info.py",
       "size": 585,
-      "sha256": "3dcf2ad6fc771996402d08f14c412d132e58d0efe45f96f4887e0b3c73d152f8",
-      "git_sha256": "3dcf2ad6fc771996402d08f14c412d132e58d0efe45f96f4887e0b3c73d152f8"
+      "sha256": "3e23229362d1e010390d82972e49e08e7318b5e230ef84f055699450a85f0aa5",
+      "git_sha256": "3e23229362d1e010390d82972e49e08e7318b5e230ef84f055699450a85f0aa5"
     },
     {
       "path": "server/calibration.py",
@@ -859,9 +865,9 @@
     },
     {
       "path": "server/main.py",
-      "size": 26475,
-      "sha256": "a990017e53960ec69233da70d347ca557bc76fbbc1058215467a1ad4fec43697",
-      "git_sha256": "a990017e53960ec69233da70d347ca557bc76fbbc1058215467a1ad4fec43697"
+      "size": 27252,
+      "sha256": "a4dade0f23c67eca19ac41b6e5aaf022efc85f71f1bdc6953c98d5b0417a724b",
+      "git_sha256": "a4dade0f23c67eca19ac41b6e5aaf022efc85f71f1bdc6953c98d5b0417a724b"
     },
     {
       "path": "server/match_events.py",
@@ -901,9 +907,9 @@
     },
     {
       "path": "server/scoreboard_state.py",
-      "size": 18348,
-      "sha256": "eddcc307ba741485677cf632be843c2721a98c91f069120334acd66909ff4356",
-      "git_sha256": "eddcc307ba741485677cf632be843c2721a98c91f069120334acd66909ff4356"
+      "size": 20445,
+      "sha256": "e6f28b67f5cad532e1399d68590c56886029d8f7155d862bfa8b344788f1220e",
+      "git_sha256": "e6f28b67f5cad532e1399d68590c56886029d8f7155d862bfa8b344788f1220e"
     },
     {
       "path": "server/studio_client.py",
@@ -1015,9 +1021,9 @@
     },
     {
       "path": "tests/helpers/operator-harness.cjs",
-      "size": 4352,
-      "sha256": "e039e6cd0dd5d9af7e6d50de779d604b90d4334b06f2a31ba5923eabf6921114",
-      "git_sha256": "e039e6cd0dd5d9af7e6d50de779d604b90d4334b06f2a31ba5923eabf6921114"
+      "size": 4810,
+      "sha256": "11fe42c4177fc0110c72dd3c5dc7953d220ee34ec9ad842462e98c72e87aeb3b",
+      "git_sha256": "11fe42c4177fc0110c72dd3c5dc7953d220ee34ec9ad842462e98c72e87aeb3b"
     },
     {
       "path": "tests/live-ui.test.cjs",
@@ -1090,6 +1096,12 @@
       "size": 3747,
       "sha256": "7de9d9dfeb59430516b0f44befaed5b4139a0de73f800fa7a10cc353d196f05b",
       "git_sha256": "7de9d9dfeb59430516b0f44befaed5b4139a0de73f800fa7a10cc353d196f05b"
+    },
+    {
+      "path": "tests/team-delete.test.cjs",
+      "size": 3234,
+      "sha256": "82b5e2b7ceef20d4327c2b578929583e13e8cde845879b8635e50213b3423a3c",
+      "git_sha256": "82b5e2b7ceef20d4327c2b578929583e13e8cde845879b8635e50213b3423a3c"
     },
     {
       "path": "tests/test_app.py",
@@ -1204,6 +1216,12 @@
       "size": 4523,
       "sha256": "5151c9b09e06c408540599bd832a3aaa704255e28a9b72086202ae931f4a0f2a",
       "git_sha256": "5151c9b09e06c408540599bd832a3aaa704255e28a9b72086202ae931f4a0f2a"
+    },
+    {
+      "path": "tests/test_team_delete.py",
+      "size": 3915,
+      "sha256": "83b4f4fb35689c4864fa61d13b5fcd27c056ccc6688ebfadb3569d100aab834d",
+      "git_sha256": "83b4f4fb35689c4864fa61d13b5fcd27c056ccc6688ebfadb3569d100aab834d"
     },
     {
       "path": "tests/ui-smoke.cjs",

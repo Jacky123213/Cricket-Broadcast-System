@@ -24,7 +24,7 @@ from .network import discover_local_ips
 from .replay import ReplayStore
 from .calibration import Calibration
 from .power import SleepGuard
-from .scoreboard_state import State as ScoreboardState
+from .scoreboard_state import State as ScoreboardState, TeamInUseError
 from .bluetooth_receiver import start_receiver
 from .build_info import APP_VERSION, SCOREBOARD_VERSION, UI_BUILD_ID
 from .broadcast_desk import BroadcastDesk
@@ -294,6 +294,21 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
             return await asyncio.to_thread(scoreboard.save_team, profile)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
+
+    @app.delete('/api/teams')
+    async def delete_team(command: dict[str, Any]):
+        if set(command) != {'name'}:
+            raise HTTPException(400, 'Supply the saved team name')
+        try:
+            return await asyncio.to_thread(scoreboard.delete_team, command['name'])
+        except TeamInUseError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except KeyError as exc:
+            raise HTTPException(404, 'This team is no longer saved. Refresh Teams & Players.') from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(503, 'Could not delete the team. Check the Studio saved-data folder and try again.') from exc
 
     @app.get("/overlay", include_in_schema=False)
     async def scoreboard_overlay() -> FileResponse:

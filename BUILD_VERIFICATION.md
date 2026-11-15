@@ -1,3 +1,30 @@
+# 1.10.0-rc.2 · delete saved teams
+
+- Added confirmed deletion of unused teams, including appearance, roster and
+  lineup selections. Current live teams, teams in recorded innings and teams on
+  held graphics are protected on both client and server. Case/spacing-normalised
+  names and names containing slashes are supported through a scoped DELETE body.
+- Deletion preserves current score/settings, innings, unrelated teams and card
+  details. A team-list write failure rolls back the preset change. Cancelling or
+  an API conflict keeps the editor and its draft; success refreshes the picker.
+- 210 Python tests, 128 JavaScript tests and all three DOM smoke checks pass.
+  New checks cover deletion/restart, roster/selection cleanup, invalid and unknown
+  names, active/history/graphic protection, persistence rollback, cancellation,
+  correct saved identity and conflict/draft recovery.
+- Native Edge check passed desktop dark and mobile light controls, confirmation/
+  cancellation, successful deletion, picker refresh, protected-team rejection and
+  restart with unchanged live score. Screenshots inspected. Results:
+  `.installer-test/team-delete-ui-rc2-verified/results.json`.
+- Final packaged EXE passed its existing native modules, verified HTTPS/WebSocket,
+  Host/Connect, ten-section desktop, graphics and spectator self-test in the fresh
+  `.installer-test/frozen-1100-rc2-team-delete/` folder. No real teams were deleted,
+  installed app replaced or diagnostic CA trusted.
+- Installer: 56,637,100 bytes; Windows product version 1.10.0.2.
+  SHA-256: `F44391D216BB02DF604B3362BCD9E62706D71D109A4B26C5E96FC87A9BEDD6F8`.
+  Bundle privacy audit: 1,340 files. Companion source export verifies all frontend
+  bytes against the bundle. Published rc.1 installer/source remain archived in
+  `.installer-test/before-1100-rc2-team-delete/`.
+
 # 1.10.0-rc.1 · organised operator interface and theme
 
 - Built in the separate Installer workspace. The original .bat app and installed

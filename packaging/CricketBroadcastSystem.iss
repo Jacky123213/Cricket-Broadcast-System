@@ -1,5 +1,5 @@
 #define ProductName "Cricket Broadcast System"
-#define ProductVersion "1.10.0-rc.1"
+#define ProductVersion "1.10.0-rc.2"
 #define ProductExe "CricketBroadcastSystem.exe"
 #ifndef ProductId
   #define ProductId "{{68A95CA1-D445-45D9-85AF-632D0411E3E4}"
@@ -32,8 +32,8 @@ AppMutex=Local\CricketBroadcastSystem
 CloseApplications=no
 RestartApplications=no
 SetupLogging=yes
-VersionInfoVersion=1.10.0.1
-VersionInfoProductVersion=1.10.0.1
+VersionInfoVersion=1.10.0.2
+VersionInfoProductVersion=1.10.0.2
 VersionInfoProductTextVersion={#ProductVersion}
 InfoBeforeFile=installer-info.txt
 UninstallFilesDir={app}\uninstall

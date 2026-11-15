@@ -1,6 +1,6 @@
 # Cricket Broadcast System
 
-> **Windows prerelease: 1.10.0-rc.1** — Python is bundled; users do not install
+> **Windows prerelease: 1.10.0-rc.2** — Python is bundled; users do not install
 > Python or run pip. Download the Setup.exe from
 > [Releases](https://github.com/Jacky123213/Cricket-Broadcast-System/releases).
 > Start with [OPERATOR_UI_GUIDE.md](OPERATOR_UI_GUIDE.md) for the ten-section
@@ -8,7 +8,7 @@
 > hardware testing. The earlier clean Windows 10/no-Python installation was reported
 > working; stable v1.5.1 and archived prereleases remain available.
 
-Prerelease: **1.10.0-rc.1** · Scoreboard graphics **0.10.0** · DRS engine **0.15.2**.
+Prerelease: **1.10.0-rc.2** · Scoreboard graphics **0.10.0** · DRS engine **0.15.2**.
 
 Backyard Cricket Studio combines **Backyard DRS Replay Studio 0.15.2** and **Backyard Scoreboard 0.2** into one local Windows application.
 
@@ -19,6 +19,10 @@ use responsive web pages over the same local network. Match operation does not
 require cloud access. Appearance supports dark, light and the device setting.
 
 ## Features
+
+- Delete unused saved teams from Teams & Players, including their roster and
+  match-lineup selections. Confirmation and current-match/on-air protection are
+  enforced; the live score and other teams are preserved.
 
 - Private graphic previews with explicit Show/Clear, scoped score/settings saves,
   reusable team identities/rosters and match-specific playing lineups. Live-readout

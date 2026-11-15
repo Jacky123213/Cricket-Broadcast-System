@@ -13,7 +13,42 @@ import urllib.request
 from unittest.mock import patch
 
 
-def check(output):
+def check_team_delete(app, output, js, wait, size, navigate, shot):
+    from server.scoreboard_state import State
+    score = app.state.scoreboard
+    name = 'Practice / Reserve'
+    score.save_team({'name': name, 'color': '#235d41', 'logo': ''})
+    score.packs.save({'team': {'team': name, 'players': [{'name': 'Reserve player'}]}})
+    score.packs.save({'lineup': {'match_id': score.graphics.match_id, 'team': name, 'players': ['Reserve player']}})
+    before = copy.deepcopy(score.data)
+    size(1440, 900); navigate('/teams')
+    wait("document.getElementById('deleteTeam')&&document.getElementById('teamPicker').options.length>=3")
+    assert js("document.getElementById('deleteTeam').disabled") is True
+    js("document.getElementById('teamPicker').value='Practice / Reserve';document.getElementById('teamPicker').dispatchEvent(new Event('change'))")
+    assert js("document.getElementById('deleteTeam').disabled") is False
+    js("window.CricketPreferences.save({theme:'dark'})")
+    shot('team-delete-dark.png')
+    size(390,844);js("window.CricketPreferences.save({theme:'light'})");time.sleep(.25)
+    assert js('document.documentElement.scrollWidth<=innerWidth')
+    shot('team-delete-mobile-light.png')
+    js("window.confirm=message=>{window.lastDeletePrompt=message;return false};document.getElementById('deleteTeam').click()")
+    assert any(t['name']==name for t in score.team_library())
+    assert name in js('window.lastDeletePrompt')
+    js("window.confirm=()=>true;document.getElementById('deleteTeam').click()")
+    wait("document.getElementById('workspaceStatus').textContent.includes('Deleted')")
+    assert not any(t['name']==name for t in score.team_library())
+    assert not any(t['team']==name for t in score.packs.snapshot()['teams'])
+    assert not any(t['team']==name for t in score.packs.snapshot()['lineups'])
+    assert not js("[...document.getElementById('teamPicker').options].some(o=>o.value==='Practice / Reserve')")
+    assert score.data==before
+    assert not any(t['name']==name for t in State(score.folder).team_library())
+    rejected=js("fetch('/api/teams',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Pavilion XI'})}).then(r=>r.status)")
+    assert rejected==409
+    return [dict(delete_confirm_and_cancel=True,roster_and_lineup_removed=True,picker_refreshed=True,
+                 current_match_protected=True,live_score_unchanged=True,survives_restart=True,mobile_light_no_overflow=True)]
+
+
+def check(output, teams_only=False):
     import uvicorn
     from websockets.sync.client import connect
     from server.config import Settings
@@ -82,6 +117,11 @@ def check(output):
             def shot(name):(output/name).write_bytes(base64.b64decode(call('Page.captureScreenshot',dict(format='png'))['data']))
 
             call('Page.enable');call('Runtime.enable')
+            if teams_only:
+                results=check_team_delete(app,output,js,wait,size,navigate,shot)
+                (output/'results.json').write_text(json.dumps(results,indent=2),'utf-8')
+                print(json.dumps(results,indent=2),flush=True)
+                return
             results=[]
             for route in ['match-day','umpire','scoreboard','match-setup','teams','graphics','highlights','connections','settings','help']:
                 size(1440,900);navigate('/'+route)
@@ -167,4 +207,4 @@ def check(output):
 
 if __name__=='__main__':
     sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-    check(sys.argv[1])
+    check(sys.argv[1], teams_only='--teams-only' in sys.argv)

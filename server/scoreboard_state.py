@@ -8,6 +8,11 @@ from pathlib import Path
 from .scoreboard_protocol import ScoreDecoder
 from .broadcast_graphics import BroadcastGraphics
 from .graphics_packs import GraphicsPacks
+from .install_support import write_json_atomic
+
+
+class TeamInUseError(ValueError):
+    """A library deletion would affect the current match or held graphic."""
 
 DEFAULT = dict(team1='HOME', team2='AWAY', color1='#ec218c', color2='#ff922e',
                logo1='', logo2='', runs='', wickets='', overs='',
@@ -256,6 +261,41 @@ class State:
                         innings[prefix+'color'], innings[prefix+'logo'] = saved['color'], saved['logo']
                         self.graphics.dirty = True
             self._save_graphics()
+            return self.team_library()
+
+    def delete_team(self, name):
+        validate({'team1': name})
+        identity = team_key(name)
+        if not identity:
+            raise ValueError('Choose a saved team')
+        # Match changes and roster writes must not race the in-use check.
+        with self.lock, self.packs.lock:
+            used = {team_key(self.data['team1']), team_key(self.data['team2'])}
+            for innings in self.graphics.innings:
+                used.update(team_key(innings.get(field, '')) for field in ('team', 'opposition'))
+            used.add(team_key((self.graphics.active or {}).get('team', '')))
+            if identity in used:
+                raise TeamInUseError('This team is used in the current match or an on-air graphic. Start a new match with other teams, or clear its graphic, before deleting.')
+            before = self.packs.snapshot()
+            if identity not in self.teams and not any(team_key(t['team']) == identity for t in before['teams']):
+                raise KeyError(name)
+            after = copy.deepcopy(before)
+            after['teams'] = [t for t in after['teams'] if team_key(t['team']) != identity]
+            after['lineups'] = [t for t in after['lineups'] if team_key(t['team']) != identity]
+            if team_key(after['details']['toss_team']) == identity:
+                after['details']['toss_team'] = ''
+            remaining = {key: value for key, value in self.teams.items() if key != identity}
+            changed_packs = before != after
+            if changed_packs:
+                write_json_atomic(self.packs.path, after)
+            try:
+                write_json_atomic(self.folder / 'teams.json', list(remaining.values()))
+            except OSError:
+                if changed_packs:
+                    write_json_atomic(self.packs.path, before)
+                raise
+            self.teams = remaining
+            self.packs.data = after
             return self.team_library()
 
     def save_branding(self, changes):

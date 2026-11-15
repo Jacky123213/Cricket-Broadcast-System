@@ -3,7 +3,7 @@ import hashlib
 
 from .config import PROJECT_ROOT
 
-APP_VERSION = "1.10.0-rc.1"
+APP_VERSION = "1.10.0-rc.2"
 SCOREBOARD_VERSION = "0.10.0"
 
 

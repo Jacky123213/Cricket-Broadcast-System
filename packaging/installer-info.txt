@@ -1,4 +1,8 @@
-Cricket Broadcast System 1.10.0-rc.1 — Windows prerelease
+Cricket Broadcast System 1.10.0-rc.2 — Windows prerelease
+
+Adds Delete team in Teams & Players. Confirm to remove a saved team, its roster
+and playing-lineup selections. Teams used in the current match or by an on-air
+graphic are protected. Current scores and other teams stay intact.
 
 Adds ten organised operator sections and the dark/light interface. Use Settings
 for appearance and local previews, Match Setup for rules and playing lineups,

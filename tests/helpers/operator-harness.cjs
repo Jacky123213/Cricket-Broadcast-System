@@ -1,7 +1,7 @@
 const {JSDOM}=require('jsdom'),fs=require('node:fs'),path=require('node:path');
 const read=p=>fs.readFileSync(path.join(__dirname,'../..',p),'utf8');
 const settle=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r));};
-async function harness(page,identity={name:'Test studio',client:false,local_operator:true}){
+async function harness(page,identity={name:'Test studio',client:false,local_operator:true},configure=()=>{}){
  const dom=new JSDOM(read('frontend/operator/index.html').replaceAll('__SECTION__',page),{url:'https://studio.test/'+page,runScripts:'outside-only'}),w=dom.window,d=w.document,requests=[],timers=[];
  d.getElementById('studioConnection').textContent=JSON.stringify(identity);
  w.structuredClone=structuredClone;w.AbortSignal.timeout=()=>undefined;w.setTimeout=(fn,delay)=>{timers.push({fn,delay});return timers.length;};w.confirm=()=>true;
@@ -13,8 +13,11 @@ async function harness(page,identity={name:'Test studio',client:false,local_oper
  const live={match_id:'a'.repeat(32),config:{format:'Backyard cricket',competition:'',match_date:'',clips_enabled:false,stream_enabled:false,duck_enabled:true,save_fours:true,save_sixes:true,save_wickets:true,save_other_runs:false,save_extras:false,save_dots:false,before_seconds:8,after_seconds:5,archive_limit_mb:512},highlights:[],innings:[row]};
  const app={version:'1.10.0-rc.1',scoreboard_version:'0.10.0',drs_version:'0.15.2',studio_name:'Test studio',secure_context:true,connected_cameras:0,sleep_prevention:'Active'};
  const studio={name:'Test studio',allow_join:true,code:'ABCD1234',code_seconds:1000,ca_sha256:'FP',discovery:'Ready',clients:[{id:'approved',name:'OBS PC'}]};
+ const teamLibrary=[{name:'HOME',color:score.color1,logo:''},{name:'AWAY',color:score.color2,logo:''}];
+ configure({state,teamLibrary,live,app});
  w.fetch=async(url,options)=>{requests.push({url,options});let data;if(options?.body){const body=JSON.parse(options.body);if(url==='/api/scoreboard/settings')Object.assign(score,body);if(url==='/api/scoreboard/broadcast/settings')Object.assign(config,body);if(url==='/api/graphics-packs'&&body.details)Object.assign(details,body.details);}
-  if(url==='/api/scoreboard/state')data=state;else if(url==='/api/live/state')data=live;else if(url==='/api/teams')data=[{name:'HOME',color:score.color1,logo:''},{name:'AWAY',color:score.color2,logo:''}];else if(url==='/api/app-status')data=app;else if(url==='/api/live/settings')data={...live.config,archive_count:0,archive_bytes:0,status:'Off'};else if(url==='/api/server-info')data={addresses:['https://192.168.1.68:8765']};else if(url.startsWith('/api/studio-network/'))data=studio;else if(url==='/api/broadcast/health')data={clients:[]};else if(url==='/api/buffer')data={cameras:{}};else data={ok:true};return{ok:true,status:200,json:async()=>structuredClone(data)};};
+  if(url==='/api/teams'&&options?.method==='DELETE'){const name=JSON.parse(options.body).name;teamLibrary.splice(0,teamLibrary.length,...teamLibrary.filter(t=>t.name!==name));state.graphics.presentation.teams=state.graphics.presentation.teams.filter(t=>t.team!==name);state.graphics.presentation.lineups=state.graphics.presentation.lineups.filter(t=>t.team!==name);}
+  if(url==='/api/scoreboard/state')data=state;else if(url==='/api/live/state')data=live;else if(url==='/api/teams')data=teamLibrary;else if(url==='/api/app-status')data=app;else if(url==='/api/live/settings')data={...live.config,archive_count:0,archive_bytes:0,status:'Off'};else if(url==='/api/server-info')data={addresses:['https://192.168.1.68:8765']};else if(url.startsWith('/api/studio-network/'))data=studio;else if(url==='/api/broadcast/health')data={clients:[]};else if(url==='/api/buffer')data={cameras:{}};else data={ok:true};return{ok:true,status:200,json:async()=>structuredClone(data)};};
  w.eval(read('frontend/assets/preferences.js'));w.eval(read('frontend/assets/operator-nav.js'));w.eval(read('frontend/operator/workspace.js'));await settle();
  return{dom,w,d,requests,timers,state,score,live,app,studio,settle,submit:id=>{d.getElementById(id).dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));},close:()=>w.close()};
 }
