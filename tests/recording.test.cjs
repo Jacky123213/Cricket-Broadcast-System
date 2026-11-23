@@ -67,7 +67,7 @@ test('recording bitrate scales with capture and stays bounded',async()=>{
  }
 });
 
-test('silent Firefox recording requests VP8 only; Opus is requested only for a real audio track',async()=>{
+test('video-only recording omits Opus when no audio timing track is available',async()=>{
  for(const audio of [false,true]){const c=context(async()=>({ok:true}));let options;
   class Recorder{static isTypeSupported(mime){return mime.startsWith('video/webm');}constructor(s,o){options=o;}start(){this.state='recording';}stop(){this.state='inactive';}}
   c.MediaRecorder=Recorder;c.window.MediaRecorder=Recorder;
@@ -76,3 +76,14 @@ test('silent Firefox recording requests VP8 only; Opus is requested only for a r
   assert.equal(options.mimeType,audio?'video/webm;codecs=vp8,opus':'video/webm;codecs=vp8');r.stop();
  }
 });
+
+function firefoxClock(c){const created=[],synthetic={kind:'audio',readyState:'live',stopped:false,stop(){this.stopped=true;}};
+ class AudioContext{constructor(){this.state='running';this.closed=false;created.push(this);}async resume(){}async close(){this.closed=true;}createConstantSource(){return {offset:{value:1},connect(){},start(){},stop(){}};}createGain(){return {gain:{value:1},connect(){}};}createMediaStreamDestination(){return {stream:{getAudioTracks:()=>[synthetic]}};}}
+ c.window.navigator={userAgent:'Firefox/160.0',mediaDevices:{getUserMedia(){throw Error('No microphone permission should be requested');}}};c.window.AudioContext=AudioContext;c.MediaStream=class{constructor(tracks){this.tracks=tracks;}getAudioTracks(){return this.tracks.filter(t=>t.kind==='audio');}getVideoTracks(){return this.tracks.filter(t=>t.kind==='video');}};
+ return {created,synthetic};}
+test('Firefox video-only capture adds a silent private timing track and releases only its own track',async()=>{const c=context(async()=>({ok:true})),h=firefoxClock(c),video={kind:'video',stopped:false,stop(){this.stopped=true;}},source={getVideoTracks:()=>[video],getAudioTracks:()=>[]},r=new c.window.DRSRecorder('pc',source,()=>{});await r.videoTimingTrack();assert.equal(h.created.length,1);assert.equal(r.stream.getAudioTracks().length,1);assert.equal(source.getAudioTracks().length,0);await r.videoTimingTrack();assert.equal(h.created.length,1);r.stop();assert.ok(h.synthetic.stopped);assert.ok(h.created[0].closed);assert.equal(video.stopped,false);assert.equal(r.stream,source);});
+test('Firefox timing silence is not advertised as microphone audio and is cleaned up after capture',async()=>{const uploads=[],c=context(async(url,options)=>{uploads.push(url);return {ok:true};}),h=firefoxClock(c);let t=0;c.performance.now=()=>t;
+ class Recorder{static isTypeSupported(t){return t.startsWith('video/webm');}constructor(s,o){this.options=o;}start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['clip'])});this.onstop();}}
+ c.MediaRecorder=c.window.MediaRecorder=Recorder;const r=new c.window.DRSRecorder('pc',{getVideoTracks:()=>[{kind:'video',getSettings:()=>({frameRate:30})}],getAudioTracks:()=>[]},()=>{});r.clock.sync=async()=>{r.clock.checked=100000;r.clock.uncertainty=2;};await r.start();assert.equal(r.mime,'video/webm;codecs=vp8,opus');t=3000;r.stop();await new Promise(r=>setImmediate(r));assert.equal(new URL(uploads[0],'http://studio').searchParams.get('audio'),'false');assert.ok(h.created[0].closed);});
+test('real microphone tracks are preserved and recorder-start errors close the private timing context',async()=>{const c=context(async()=>({ok:true})),h=firefoxClock(c),source={getVideoTracks:()=>[],getAudioTracks:()=>[{kind:'audio',readyState:'live'}]},r=new c.window.DRSRecorder('pc',source,()=>{});await r.videoTimingTrack();assert.equal(h.created.length,0);assert.equal(r.stream,source);
+ class Recorder{static isTypeSupported(){return true;}}c.MediaRecorder=c.window.MediaRecorder=Recorder;const failed=new c.window.DRSRecorder('pc',{getVideoTracks:()=>[],getAudioTracks:()=>[]},()=>{});failed.clock.sync=async()=>{throw Error('Clock failed');};await assert.rejects(failed.start(),/Clock failed/);assert.ok(h.created[0].closed);assert.ok(h.synthetic.stopped);});

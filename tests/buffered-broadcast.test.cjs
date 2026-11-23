@@ -1,15 +1,15 @@
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
-test('five-second playout uses native clip timestamps and destroys polling/decoders',async()=>{
+test('adaptive eight-second playout uses native clip timestamps and destroys polling/decoders',async()=>{
  const intervals=new Map(),timeouts=new Map(),frames=[],videos=[],statuses=[];let local=200,player;
  class Player{constructor(clips,makeVideo){this.clips=clips;this.slots=[0,1].map(()=>({video:makeVideo()}));player=this;}update(t,playing,rate){this.request={t,playing,rate};}play(){this.resumed=true;}destroy(){this.closed=true;}}
- const context={window:{DRSPlayback:{AnglePlayer:Player}},document:{createElement:()=>{const v={play:async()=>{},setAttribute(){}};videos.push(v);return v;}},performance:{now:()=>local},fetch:async()=>({ok:true,json:async()=>({server_ms:10000,clips:[{id:'one',start_ms:4000,end_ms:9000,audio:true}],recorder:null})}),AbortController,
+ const context={window:{DRSPlayback:{AnglePlayer:Player}},document:{createElement:()=>{const v={play:async()=>{},setAttribute(){}};videos.push(v);return v;}},performance:{now:()=>local},fetch:async()=>({ok:true,json:async()=>({server_ms:10000,clips:[{id:'one',start_ms:1000,end_ms:9000,audio:true}],recorder:null})}),AbortController,
  setTimeout:(fn,ms)=>{const id=timeouts.size+1;timeouts.set(id,{fn,ms});return id;},clearTimeout:id=>timeouts.delete(id),setInterval:(fn,ms)=>{intervals.set(1,{fn,ms});return 1;},clearInterval:id=>intervals.delete(id)};
  vm.createContext(context);vm.runInContext(fs.readFileSync('frontend/broadcast/buffered-broadcast.js','utf8'),context);
  const b=new context.window.DRSBufferedBroadcast('test',{append(){}},{onFrame:f=>frames.push(f),onStatus:s=>statuses.push(s),onBuffering(){},onMute(){}});
- await new Promise(r=>setImmediate(r));assert.equal(player.request.t,5000);assert.equal(player.request.playing,true);assert.equal(player.clips.length,1);
+ await new Promise(r=>setImmediate(r));assert.equal(player.request.t,2000);assert.equal(player.request.playing,true);assert.equal(player.clips.length,1);
  b.setMuted(false);assert.ok(videos.every(v=>v.muted===false));
  player.ready=true;player.active={clip:player.clips[0],video:{hidden:false,paused:false,readyState:4,currentTime:1.05}};
- local=250;b.tick();assert.equal(frames[0].at,5050);assert.equal(frames[0].delay,5);assert.equal(frames[0].audio,true);
+ local=250;b.tick();assert.equal(frames[0].at,2050);assert.equal(frames[0].delay,8);assert.equal(frames[0].audio,true);
  b.resume();assert.equal(player.resumed,true);b.destroy();assert.equal(player.closed,true);assert.equal(intervals.size,0);assert.equal(timeouts.size,0);
 });
 
@@ -48,4 +48,18 @@ test('high-latency clock polls cannot jerk continuous playout',async()=>{
  local=2000;const before=b.now();b.syncClock(20000,500,2000);assert.equal(b.now(),before,'a slow poll does not replace the best clock sample');
  // Even after old samples age out, a new estimate is slewed, not jumped.
  local=65000;const later=b.now();b.syncClock(90000,64990,65000);assert.ok(Math.abs(b.now()-later)<=25);b.destroy();
+});
+
+test('initial buffer wait leaves the decoder alone; a real stall recovers with bounded delay and preserves audio',async()=>{
+ let local=0;const players=[],frames=[];
+ class Player{constructor(clips,makeVideo){this.slots=[{video:makeVideo()}];this.failures=new Map();players.push(this);}update(t){this.at=t;}destroy(){this.closed=true;}}
+ const context={window:{DRSPlayback:{AnglePlayer:Player}},document:{createElement:()=>({setAttribute(){},play:async()=>{}})},performance:{now:()=>local},fetch:async()=>({ok:true,json:async()=>({server_ms:10000,clips:[]})}),AbortController,setTimeout:()=>1,clearTimeout(){},setInterval:()=>2,clearInterval(){}};
+ vm.createContext(context);vm.runInContext(fs.readFileSync('frontend/broadcast/buffered-broadcast.js','utf8'),context);
+ const b=new context.window.DRSBufferedBroadcast('test',{append(){}},{onFrame:f=>frames.push(f),onStatus(){},onBuffering(){},onMute(){}});await new Promise(r=>setImmediate(r));
+ for(local=1000;local<=10000;local+=1000)b.tick();assert.equal(players.length,1);assert.equal(b.delay,8000);
+ // Simulate a decoder that stops advancing despite valid downloaded footage.
+ local=11000;b.manifest=[{id:'a',start_ms:1000,end_ms:50000}];b.readyClips();b.player.active={clip:b.manifest[0],video:{hidden:false,paused:false,readyState:4,currentTime:12}};b.setMuted(false);b.tick();
+ local=11100;b.tick();local=12700;b.tick();assert.equal(b.delay,9000);local=13800;b.tick();assert.equal(players.length,2);assert.equal(b.recoveries,1);assert.ok(players[0].closed);assert.equal(b.delay,10000);assert.ok(players[1].at>=frames[0].at);assert.ok(players[1].slots.every(s=>s.video.muted===false));
+ local=15000;b.tick();assert.equal(players.length,2,'recovery cannot loop every tick');
+ b.player.active={clip:b.manifest[0],video:{hidden:false,paused:false,readyState:4,currentTime:14.5}};local=15100;b.tick();assert.equal(b.buffering,false);b.destroy();
 });

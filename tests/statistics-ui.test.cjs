@@ -1,0 +1,25 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{JSDOM}=require('jsdom');
+const read=p=>fs.readFileSync(p,'utf8'),settle=async()=>{for(let i=0;i<5;i++)await new Promise(setImmediate);};
+function page(path){const dom=new JSDOM(read(path),{url:'https://local/',runScripts:'outside-only',pretendToBeVisual:true}),w=dom.window;w.AbortSignal.timeout=()=>undefined;w.setInterval=()=>1;w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};return {w,d:w.document,close:()=>w.close()};}
+const sample=()=>({match_id:'a'.repeat(32),revision:'b'.repeat(64),snapshot:{title:'Test match',result:'Blue wins'},teams:['Blue','Red'],players:[{key:'ali',name:'Ali',team:'Blue',batting:[{runs:0,balls:1,dismissal:'b Dee'}],bowling:[],suggested_id:'',ambiguous:false}],directory:[],warnings:['No lineup saved'],outcome:'win',winner:'Blue',saved:null});
+test('results prompt waits for review, preserves errors and sends one explicit submission',async()=>{
+ const h=page('frontend/operator/statistics.html'),{w,d}=h,posts=[];let status={needs_review:true,match_id:'a'.repeat(32),revision:'b'.repeat(64)},reject=true;
+ try{w.fetch=async(url,options={})=>{if(options.method==='POST'){posts.push(JSON.parse(options.body));return {ok:!reject,json:async()=>reject?{detail:'Result changed. Reload review.'}:{ok:true}};}return {ok:true,json:async()=>url.endsWith('/status')?status:sample()};};w.eval(read('frontend/assets/results-review.js'));await settle();
+  assert.equal(d.querySelector('#resultsReview').open,true);assert.equal(posts.length,0);assert.equal(d.querySelector('#acceptMissing').required,true);d.querySelector('#acceptMissing').checked=true;
+  d.querySelector('#resultsForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();assert.equal(posts.length,1);assert.equal(posts[0].players[0].name,'Ali');assert.equal(posts[0].accept_missing,true);assert.match(d.querySelector('#resultsError').textContent,/Result changed/);assert.equal(d.querySelector('#resultsReview').open,true);
+  reject=false;let notified=0;w.addEventListener('cricket-results-saved',()=>notified++);d.querySelector('#resultsForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();assert.equal(notified,1);assert.equal(d.querySelector('#resultsReview').open,false);
+ }finally{h.close();}
+});
+test('replace requires a visible confirmation and carries the saved revision; Later saves no totals',async()=>{
+ const h=page('frontend/operator/statistics.html'),{w,d}=h;let calls=[];const review=sample();review.saved={version:4,status:'accepted'};review.outcome='tie';review.winner='';
+ try{w.fetch=async(url,options={})=>{calls.push({url,options});return {ok:true,json:async()=>url.endsWith('/status')?{needs_review:false}:review};};w.eval(read('frontend/assets/results-review.js'));await settle();await w.CricketResults.open();assert.equal(d.querySelector('#replaceResult').required,true);d.querySelector('[data-later]').click();assert.equal(calls.filter(c=>c.options.method==='POST').length,0);assert.equal(d.querySelector('dialog').open,false);assert.match(w.localStorage.getItem('cricket.results.later'),/^a{32}:b{64}$/);
+  await w.CricketResults.open();d.querySelector('#replaceResult').checked=true;d.querySelector('#acceptMissing').checked=true;d.querySelector('#resultsForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();const body=JSON.parse(calls.find(c=>c.options.method==='POST').options.body);assert.equal(body.replace,true);assert.equal(body.previous_version,4);assert.equal(body.winner,'');
+ }finally{h.close();}
+});
+test('public statistics filters players, escapes names and only reads confirmed records',async()=>{
+ const h=page('frontend/statistics/index.html'),{w,d}=h,requests=[];
+ const player={id:'c'.repeat(32),name:'Ali <img src=x>',teams:['Blue'],matches:1,runs:0,average:0,strike_rate:0,wickets:0,economy:0,missing:{},fours:0,sixes:0,fifties:0,hundreds:0,highest:'0',overs:'0.0',bowling_average:null,best:null};
+ try{w.fetch=async(url,options={})=>{requests.push({url,options});return {ok:true,json:async()=>url.includes('/players/')?{player,performances:[]}:{players:[player],teams:[{id:'t',name:'Blue',matches:1,wins:1,losses:0,ties:0,no_results:0,runs_for:0,runs_against:0}],matches:[]}};};w.eval(read('frontend/statistics/statistics.js'));await settle();assert.equal(d.querySelector('#playerList img'),null);assert.match(d.querySelector('#playerList').textContent,/Ali <img src=x>/);d.querySelector('[data-player]').click();await settle();assert.equal(d.querySelector('#statsDetail').open,true);assert.match(d.querySelector('#detailBody').textContent,/0 \/ 0/);
+  d.querySelector('#playerSearch').value='missing';d.querySelector('#playerSearch').dispatchEvent(new w.Event('input'));assert.equal(d.querySelectorAll('#playerList tbody tr').length,0);assert.ok(requests.every(r=>!r.options.method||r.options.method==='GET'));
+ }finally{h.close();}
+});

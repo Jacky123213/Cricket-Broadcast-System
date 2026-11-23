@@ -61,7 +61,7 @@ def test_branding_api_and_clean_broadcast_share_server_and_persist(tmp_path):
         for route in ['/broadcast', '/broadcast?clean=1&audio=1']:
             html = client.get(route).text
             assert 'id="broadcastLogo"' in html
-            assert '/static/broadcast-logo.js?v=1.3.0' in html
+            assert '/static/broadcast-logo.js?v=' in html
         assert client.get('/static/app-theme.css').status_code == 200
         assert client.get('/static/sections.js').status_code == 200
         with patch.object(state, 'save_branding', side_effect=OSError('read only')):

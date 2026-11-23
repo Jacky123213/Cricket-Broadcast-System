@@ -46,7 +46,7 @@ control connection alone is not proof that usable replay clips are uploading.
 **Match Day → Program camera** now controls bare `/broadcast` links. Existing
 explicit `?camera=ID` links intentionally remain fixed. If OBS is using an old
 fixed-camera URL, replace it with Match Day's shared clean OBS link, or use
-`/broadcast?follow=1&clean=1&client=obs&audio=1`. The five-second delay remains.
+`/broadcast?follow=1&clean=1&client=obs&audio=1`. Live playback now targets an adaptive 8–10 second delay.
 
 Shared program camera changes hold the previous real frame while the next
 camera decodes, then crossfade over 180 ms. Audio switches with the new source;
@@ -131,7 +131,7 @@ repair footage the camera never uploaded. Reviews have a 256 MB preload limit;
 choose a shorter window if it is exceeded. Each download has a 30-second timeout.
 
 This is for the standalone umpire DRS viewer and saved highlight player. The
-five-second live broadcast buffer and shared on-air replay timeline are separate;
+adaptive 8–10 second live broadcast buffer and shared on-air replay timeline are separate;
 they are not held until an entire future/live programme can download.
 
 ## Show the actual umpire review — 1.9.0-rc.1

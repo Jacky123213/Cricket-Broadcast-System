@@ -1,10 +1,12 @@
-# Cricket Broadcast System 1.10.0-rc.2 — Windows prerelease
+# Cricket Broadcast System 1.12.0-rc.2 — Windows prerelease
 
-This update adds Delete team under Teams & Players, with confirmation and protection
-for current-match and on-air teams. Close Studio before installing the update.
+This update adds blank overlays, team abbreviations, fixed Home/Away match setup,
+neutral Coming Up and full-width sponsor images. Live playback now uses complete
+clip downloads, automatic recovery and an adaptive 8–10 second buffer. Close
+Studio before installing. See RELEASE_NOTES_1.12.0-rc.2.md for the changes.
 
 This Windows installer candidate includes all changes since published 1.7.0-rc.2.
-See OPERATOR_UI_GUIDE.md for the ten-section interface, dark/light preference,
+See OPERATOR_UI_GUIDE.md for the twelve-section interface, dark/light preference,
 scoped corrections, private graphics previews and match-specific playing lineups.
 Installed-PC approvals moved from Settings to Connections on the host PC.
 See LIVE_MATCH_GUIDE.md for the live match

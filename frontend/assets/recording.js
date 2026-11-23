@@ -32,23 +32,40 @@
   window.DRSClock = Clock;
   window.DRSRecorder = class {
     constructor(id, stream, report) {
-      this.id=id;this.stream=stream;this.report=report;this.clock=new Clock();
+      this.id=id;this.stream=stream;this.originalStream=stream;this.report=report;this.clock=new Clock();this.timing=null;
       this.running=false;this.cancelled=false;this.pending=0;this.records=new Set();
     }
     async start() {
       this.report('Checking recorder support…');
       if(!window.MediaRecorder) throw Error('This browser cannot record replay clips');
+      try {
+      await this.videoTimingTrack();
       // Firefox waits indefinitely for audio when Opus is requested without
       // an audio track (Mozilla 1881826). Never request a missing track kind.
       const audio=this.stream.getAudioTracks?.().some(t=>t.readyState==='live')||false;
       this.mime=['video/mp4',audio?'video/webm;codecs=vp8,opus':'video/webm;codecs=vp8','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));
       if(!this.mime) throw Error('No supported recording codec');
       await this.clock.sync(this.report);
-      if(this.cancelled)return;
+      if(this.cancelled){this.closeTimingTrack();return;}
       this.running=true;
       this.interval=setInterval(()=>this.clock.sample().catch(e=>this.report(e.message)),10000);
       this.next();
+      }catch(error){this.closeTimingTrack();throw error;}
     }
+    async videoTimingTrack(){
+      if(this.timing||this.originalStream.getAudioTracks?.().some(t=>t.readyState==='live')||!/Firefox\//i.test(window.navigator?.userAgent||''))return;
+      const Context=window.AudioContext||window.webkitAudioContext;
+      if(!Context||typeof MediaStream==='undefined')return;
+      let context;
+      try{
+        context=new Context();const resumed=await Promise.race([context.resume().then(()=>true),new Promise(resolve=>setTimeout(()=>resolve(false),750))]);
+        if(!resumed||context.state!=='running'||this.cancelled){context.close().catch(()=>{});return;}
+        const source=context.createConstantSource(),gain=context.createGain(),destination=context.createMediaStreamDestination();source.offset.value=0;gain.gain.value=0;source.connect(gain);gain.connect(destination);source.start();
+        this.timing={context,source,tracks:destination.stream.getAudioTracks()};
+        this.stream=new MediaStream([...this.originalStream.getVideoTracks(),...this.timing.tracks]);
+      }catch{context?.close().catch(()=>{});}
+    }
+    closeTimingTrack(){if(!this.timing)return;try{this.timing.source.stop();}catch{}for(const t of this.timing.tracks)t.stop();this.timing.context.close().catch(()=>{});this.timing=null;this.stream=this.originalStream;}
     next() {
       clearTimeout(this.nextTimer);
       if(!this.running)return;
@@ -62,17 +79,18 @@
       let recorder;
       try {recorder=new MediaRecorder(this.stream,{mimeType:this.mime,videoBitsPerSecond:bitrate});}
       catch(e){this.report('Encoder unavailable: '+e.message);this.nextTimer=setTimeout(()=>this.next(),1000);return;}
-      const entry={recorder,start,end:start,chunks:[],offset,error,audio:this.stream.getAudioTracks?.().some(t=>t.readyState==='live'&&t.enabled!==false)||false};this.records.add(entry);
+      const entry={recorder,start,end:start,chunks:[],offset,error,audio:this.originalStream.getAudioTracks?.().some(t=>t.readyState==='live'&&t.enabled!==false)||false};this.records.add(entry);
       recorder.ondataavailable=e=>{if(e.data.size)entry.chunks.push(e.data);};
       recorder.onerror=()=>{this.report('Encoder error — reconnect camera');this.stop();};
       recorder.onstop=()=>{
         clearTimeout(entry.watchdog);clearTimeout(entry.stopTimer);this.records.delete(entry);
         this.upload(entry).catch(e=>this.report('Replay gap: '+e.message));
+        if(this.cancelled&&!this.records.size)this.closeTimingTrack();
       };
       try {recorder.start();}
       catch(e){this.records.delete(entry);this.report('Overlap not supported or encoder busy: '+e.message);this.nextTimer=setTimeout(()=>this.next(),1000);return;}
       this.report('Recording · '+this.mime+' · target '+(bitrate/1000000).toFixed(1)+' Mbps');
-      // Three-second clips arrive well before five-second delayed playout needs
+      // Three-second clips arrive before adaptive delayed playout needs
       // them. Keep a one-second overlap for decoder handover, without changing
       // capture resolution/bitrate or separating audio from its video.
       this.nextTimer=setTimeout(()=>this.next(),2000);
@@ -84,6 +102,7 @@
       entry.watchdog=setTimeout(()=>{
         this.report('Recorder stalled: no final clip. Keep screen awake and retry replay.');
         this.running=false;clearInterval(this.interval);clearTimeout(this.nextTimer);
+        this.closeTimingTrack();
       },10000);
       entry.recorder.stop();
     }
@@ -110,6 +129,7 @@
     stop(){
       this.cancelled=true;this.running=false;clearInterval(this.interval);clearTimeout(this.nextTimer);
       for(const entry of this.records){clearTimeout(entry.stopTimer);this.finish(entry);}
+      if(!this.records.size)this.closeTimingTrack();
     }
   };
 }());

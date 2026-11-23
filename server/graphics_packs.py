@@ -20,6 +20,7 @@ def key(name):
 class Player(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     name: str = Field(min_length=1, max_length=80)
+    player_id: str = Field(default='', pattern=r'^(?:[a-f0-9]{32})?$')
     role: str = Field(default='batter', pattern=r'^(batter|bowler|allrounder|keeper)$')
     captain: bool = False
     photo: str = Field(default='', max_length=120)
@@ -65,6 +66,7 @@ class GraphicsPacks:
         self.folder = folder
         self.path = folder/'graphics-packs.json'
         self.lock = threading.RLock()
+        self.validate_players = None
         self.data = {'details': Details().model_dump(), 'teams': [], 'lineups': []}
         if self.path.exists():
             saved = json.loads(self.path.read_text('utf-8'))
@@ -95,6 +97,11 @@ class GraphicsPacks:
                 team = TeamProfile.model_validate(changes['team']).model_dump()
                 if len({key(p['name']) for p in team['players']})!=len(team['players']):
                     raise ValueError('Each lineup player needs a different name')
+                identities = [p['player_id'] for p in team['players'] if p['player_id']]
+                if len(identities) != len(set(identities)):
+                    raise ValueError('A saved player can appear only once in a team roster')
+                if self.validate_players:
+                    self.validate_players(team)
                 if team['featured'] and team['featured'] not in {p['name'] for p in team['players']}:
                     raise ValueError('Choose the featured player from this lineup')
                 if any(not self.asset_valid(p['photo']) for p in team['players']):

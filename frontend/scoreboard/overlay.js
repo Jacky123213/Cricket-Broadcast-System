@@ -3,6 +3,7 @@ const $=id=>document.getElementById(id);
 const programMode=new URLSearchParams(location.search).get('program')==='1';
 let playoutAt=null;
 let decisionReviewed=false;
+let overlaySuppressed=false;
 window.addEventListener('message',event=>{
  if(programMode&&event.source===window.parent&&event.origin===location.origin&&event.data?.type==='broadcast-time'&&Number.isFinite(event.data.at))playoutAt=event.data.at;
  if(programMode&&event.source===window.parent&&event.origin===location.origin&&event.data?.type==='broadcast-suspend')playoutAt=null;
@@ -11,7 +12,9 @@ window.addEventListener('message',event=>{
 function render(s){
  const d=s.score;
  window.FoxODI?.apply(s.graphics,d);
- const graphicShown=decisionReviewed?false:window.BackyardGraphics?.render(s.graphics,d)||false;
+ const blank=s.graphics?.active?.kind==='blank';
+ overlaySuppressed=blank||!d.visible;
+ const graphicShown=decisionReviewed&&!blank?false:window.BackyardGraphics?.render(s.graphics,d)||false;
  if(decisionReviewed)for(const id of ['statGraphic','breakGraphic','wicketGraphic','powerSurge'])$(id).hidden=true;
  window.CricketDuck?.show(s.graphics?.duck,s.server_time,d.visible&&!graphicShown&&!decisionReviewed);
  $('scorebar').hidden=!d.visible||graphicShown;
@@ -19,6 +22,7 @@ function render(s){
  document.documentElement.style.setProperty('--team1',d.color1);
  document.documentElement.style.setProperty('--team2',d.color2);
  for(const k of ['team1','team2','overs','batter1_name','batter2_name','batter1_runs','batter2_runs','batter1_balls','batter2_balls','bowler','bowler_figures','bowler_overs'])$(k).textContent=d[k]||'—';
+ for(const slot of [1,2]){$('team'+slot).textContent=d['abbr'+slot]||d['team'+slot]||'—';$('team'+slot).title=d['team'+slot]||'';}
  $('total').textContent=d.runs!==''&&d.wickets!==''?`${d.wickets}–${d.runs}`:'—';
  const banner=decisionReviewed?'DECISION REVIEWED':s.graphics?.strip.text||d.banner||'BACKYARD CRICKET';
  const bannerText=$('bannerText');
@@ -48,7 +52,7 @@ function render(s){
  const age=s.last_score===null?Infinity:s.server_time-s.last_score;
  $('connection').hidden=!d.visible||graphicShown||s.graphics?.phase==='complete'||s.graphics?.phase==='innings_break'||d.source==='manual'||age<=30;
  $('connection').textContent=s.last_score===null?'WAITING FOR SCORE':'NO SCORE UPDATE · '+Math.floor(age)+'s';
- if(window.parent!==window)window.parent.postMessage({type:'broadcast-graphics-status',kind:!d.visible?'hidden':decisionReviewed?'scorebar':s.graphics?.active?.kind||'scorebar',surge:!$('powerSurge').hidden},location.origin);
+ if(window.parent!==window)window.parent.postMessage({type:'broadcast-graphics-status',kind:!d.visible?'hidden':blank?'blank':decisionReviewed?'scorebar':s.graphics?.active?.kind||'scorebar',blank,surge:!$('powerSurge').hidden},location.origin);
 }
 async function poll(){try{
  // Delayed program state already contains the whole overlay snapshot. Fetching
@@ -57,4 +61,4 @@ async function poll(){try{
  const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!response.ok)throw Error();const state=await response.json();
  if(programMode&&playoutAt===null)state.score.visible=false;
  render(state);
-}catch{$('connection').hidden=false;$('connection').textContent='SCORE SERVER OFFLINE';}finally{setTimeout(poll,500);}}poll();
+}catch{$('connection').hidden=overlaySuppressed;$('connection').textContent='SCORE SERVER OFFLINE';}finally{setTimeout(poll,500);}}poll();

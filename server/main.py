@@ -30,6 +30,7 @@ from .build_info import APP_VERSION, SCOREBOARD_VERSION, UI_BUILD_ID
 from .broadcast_desk import BroadcastDesk
 from .studio_network import StudioNetwork, ApprovedClientMiddleware, COOKIE, JOIN_PAGE
 from .live_match import LiveMatch
+from .career_stats import CareerStats
 
 
 mimetypes.init()
@@ -78,7 +79,9 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         monitor_task = asyncio.create_task(monitor_connections())
         async def monitor_match():
             while True:
-                try: await live.tick()
+                try:
+                    await live.tick()
+                    await asyncio.to_thread(career.stage_current)
                 except Exception:
                     logging.getLogger(__name__).exception('Live match/highlight worker needs attention')
                 await asyncio.sleep(1)
@@ -110,6 +113,10 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
     desk = BroadcastDesk(replay, manager, lambda:scoreboard.snapshot()['score']['color1'])
     live=LiveMatch(settings,scoreboard,replay,desk)
     app.state.live_match=live
+    career = CareerStats(settings.database_path, scoreboard, live)
+    scoreboard.packs.validate_players = career.validate_roster
+    app.state.career_stats = career
+    app.include_router(career.router())
     app.include_router(live.router())
     app.include_router(desk.router())
     app.include_router(desk.review.router())
@@ -165,6 +172,8 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
             "overlay_url": f"{protocol}://{ip}:{settings.port}/overlay",
             "overlay_urls": [f"{protocol}://{item}:{settings.port}/overlay" for item in ips],
             "broadcast_urls": [f"{protocol}://{item}:{settings.port}/broadcast" for item in ips],
+            "live_urls": [f"{protocol}://{item}:{settings.port}/live" for item in ips],
+            "statistics_urls": [f"{protocol}://{item}:{settings.port}/stats" for item in ips],
             "secure_context": tls_ready,
             "certificate_url": "/local-ca.crt" if tls_ready else None,
             "heartbeat_interval_seconds": settings.heartbeat_interval_seconds,
@@ -205,6 +214,11 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
     @app.get('/live',include_in_schema=False)
     @app.get('/ball-by-ball',include_in_schema=False)
     async def live_page(): return FileResponse(FRONTEND/'live'/'index.html')
+
+    @app.get('/stats', include_in_schema=False)
+    async def statistics_page(): return FileResponse(FRONTEND/'statistics'/'index.html')
+
+    app.mount('/statistics-assets',StaticFiles(directory=FRONTEND/'statistics'),name='statistics-assets')
 
     app.mount('/live-assets',StaticFiles(directory=FRONTEND/'live'),name='live-assets')
 
@@ -262,7 +276,8 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
         return HTMLResponse(page.replace("<!-- CAMERA_URLS -->", links))
 
     def operator_page(section: str, request: Request) -> HTMLResponse:
-        page = (FRONTEND/'operator'/'index.html').read_text('utf-8')
+        template = 'statistics.html' if section == 'statistics' else 'index.html'
+        page = (FRONTEND/'operator'/template).read_text('utf-8')
         connection = {"name": studio.state["name"], "client": bool(request.cookies.get(COOKIE)),
                       "local_operator": bool(request.client and request.client.host in ("127.0.0.1", "::1", "testclient") and not request.cookies.get(COOKIE))}
         return HTMLResponse(page.replace('__SECTION__', section).replace('__STUDIO_BUILD__', UI_BUILD_ID)
@@ -275,6 +290,7 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
     @app.get('/connections', include_in_schema=False)
     @app.get('/settings', include_in_schema=False)
     @app.get('/help', include_in_schema=False)
+    @app.get('/statistics', include_in_schema=False)
     async def workspace_page(request: Request):
         return operator_page(request.url.path.lstrip('/'), request)
 
@@ -287,6 +303,12 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
     @app.get('/api/teams')
     async def teams_library():
         return await asyncio.to_thread(scoreboard.team_library)
+
+    @app.post('/api/scoreboard/match-teams')
+    async def match_teams(changes:dict[str,Any]):
+        try: return await asyncio.to_thread(scoreboard.match_teams,changes)
+        except ValueError as exc: raise HTTPException(400,str(exc)) from exc
+        except OSError as exc: raise HTTPException(503,'Could not save match teams. Check the Studio data folder.') from exc
 
     @app.post('/api/teams')
     async def save_team(profile: dict[str, Any]):
@@ -369,6 +391,7 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
 
     @app.post("/api/scoreboard/reset")
     async def scoreboard_reset() -> dict[str, bool]:
+        await asyncio.to_thread(career.stage_current)
         await asyncio.to_thread(scoreboard.reset)
         return {"ok": True}
 
@@ -388,6 +411,7 @@ def create_app(settings: Settings | None = None, scoreboard: ScoreboardState | N
     async def broadcast_action(command: dict[str, Any]) -> dict[str, bool]:
         try:
             await asyncio.to_thread(scoreboard.broadcast_action, command)
+            await asyncio.to_thread(career.stage_current)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"ok": True}

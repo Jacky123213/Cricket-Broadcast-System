@@ -1,24 +1,44 @@
 # Cricket Broadcast System
 
-> **Windows prerelease: 1.10.0-rc.2** — Python is bundled; users do not install
+> **Windows prerelease: 1.12.0-rc.2** — Python is bundled; users do not install
 > Python or run pip. Download the Setup.exe from
 > [Releases](https://github.com/Jacky123213/Cricket-Broadcast-System/releases).
-> Start with [OPERATOR_UI_GUIDE.md](OPERATOR_UI_GUIDE.md) for the ten-section
+> Start with [OPERATOR_UI_GUIDE.md](OPERATOR_UI_GUIDE.md) for the twelve-section
 > interface and dark/light settings. This unsigned candidate needs full match-day
 > hardware testing. The earlier clean Windows 10/no-Python installation was reported
 > working; stable v1.5.1 and archived prereleases remain available.
 
-Prerelease: **1.10.0-rc.2** · Scoreboard graphics **0.10.0** · DRS engine **0.15.2**.
+Prerelease: **1.12.0-rc.2** · Scoreboard graphics **0.11.0** · DRS engine **0.15.2**.
 
 Backyard Cricket Studio combines **Backyard DRS Replay Studio 0.15.2** and **Backyard Scoreboard 0.2** into one local Windows application.
 
-The PC runs a native desktop window with ten organised sections: Match Day,
+The PC runs a native desktop window with twelve organised sections: Match Day,
 Replay Studio, Scoreboard, Match Setup, Teams & Players, Graphics, Highlights,
-Connections, Settings and Help. Field cameras and an optional iPad umpire console
+Connections, Settings, Help, Live Match and Statistics. Field cameras and an optional iPad umpire console
 use responsive web pages over the same local network. Match operation does not
 require cloud access. Appearance supports dark, light and the device setting.
 
 ## Features
+
+- Choose **Delayed program** or **Live camera (no added delay)** above the Match
+  Day preview. This screen's choice is remembered without changing OBS playback.
+
+- **Blank overlay** in both packs, named-team abbreviations, fixed Home/Away
+  match setup, neutral Coming Up and image-only full-width sponsor banners.
+  Every image picker lists the file limit and suggested dimensions.
+- Adaptive **8–10 second** live playback downloads complete clips before decoding,
+  retries failed files and recovers stalled decoders. Health exports include
+  download timing/errors, completed local footage and decoder recoveries.
+
+- Mark an existing player **Universal** and link the same career record to several
+  fantasy teams. Results accumulate under one profile, including when those teams
+  meet; the game counts once. Set it up in **Statistics**, then **Teams & Players**.
+
+- Confirm finished results into permanent player/team statistics, with duplicate
+  protection, corrections and a read-only local `/stats` page. See
+  [STATISTICS_GUIDE.md](STATISTICS_GUIDE.md).
+- Open **Live Match** from the sidebar for the restyled current-match pages and LAN
+  sharing. Hidden local previews release their video decoders; OBS stays active.
 
 - Delete unused saved teams from Teams & Players, including their roster and
   match-lineup selections. Confirmation and current-match/on-air protection are
@@ -104,7 +124,7 @@ ESP32-CAM and typical Arduino camera boards usually expose MJPEG/JPEG rather tha
 
 For shared production control, open **Match Day** and copy its OBS shared-program link to the second PC. See [MATCH_DAY_GUIDE.md](MATCH_DAY_GUIDE.md) for setup and measurement limits, and [RELIABILITY_TEST_CHECKLIST.md](RELIABILITY_TEST_CHECKLIST.md) for the physical camera/OBS soak test.
 
-Keep the umpire camera connected with its replay recorder running. Open `/broadcast`, select the program camera and copy its clean OBS link. This plays native recorded video and its microphone sound about five seconds behind, with graphics matched to the displayed clip timestamp. The umpire view is still live. Sound is requested by default; if your browser blocks autoplay, click **Enable camera audio** (in OBS, use **Interact**). The camera microphone can be enabled while connected; the change reaches broadcast after the buffer delay.
+Keep the umpire camera connected with its replay recorder running. Open `/broadcast`, select the program camera and copy its clean OBS link. This plays native recorded video and its microphone sound about 8–10 seconds behind, with graphics matched to the displayed clip timestamp. The umpire view is still live. Sound is requested by default; if your browser blocks autoplay, click **Enable camera audio** (in OBS, use **Interact**). The camera microphone can be enabled while connected; the change reaches broadcast after the buffer delay.
 
 Alternatively, place `/overlay` above a separate video/audio source in OBS. `/overlay` is graphics-only and has no camera sound. Graphics are not burned into DRS replay recordings. See [OVERLAY_GUIDE.md](OVERLAY_GUIDE.md) for the separate-PC workflow and audio setup.
 

@@ -48,7 +48,7 @@ def check_team_delete(app, output, js, wait, size, navigate, shot):
                  current_match_protected=True,live_score_unchanged=True,survives_restart=True,mobile_light_no_overflow=True)]
 
 
-def check(output, teams_only=False):
+def check(output, teams_only=False, audience_only=False, universal_only=False, graphics_controls_only=False, preview_only=False):
     import uvicorn
     from websockets.sync.client import connect
     from server.config import Settings
@@ -58,6 +58,14 @@ def check(output, teams_only=False):
 
     output=Path(output).resolve();output.mkdir(parents=True,exist_ok=True)
     app=create_app(Settings(data_root=output/'data',ssl_certfile=None,ssl_keyfile=None))
+    if preview_only:
+        from fastapi.responses import HTMLResponse
+        from fastapi.staticfiles import StaticFiles
+        app.mount('/diagnostic-assets',StaticFiles(directory=Path(__file__).resolve().parents[1]/'tests'/'fixtures'))
+        @app.get('/diagnostic-camera',include_in_schema=False)
+        def diagnostic_camera():
+            page=(Path(__file__).resolve().parents[1]/'frontend'/'camera'/'index.html').read_text(encoding='utf-8')
+            return HTMLResponse(page.replace('</head>','<script src="/diagnostic-assets/broadcast-camera.js"></script></head>'))
     score=app.state.scoreboard
     score.save(dict(source='manual',team1='Pavilion XI',team2='Creek XI',color1='#35a7df',color2='#00e76c',runs='94',wickets='4',overs='14.1',striker='1',batter1_name='A. Player',batter2_name='B. Player',batter1_runs='14',batter2_runs='24',batter1_balls='12',batter2_balls='26',bowler='C. Bowler',bowler_figures='2–7',bowler_overs='2.1',deliveries='W'))
     score.flush()
@@ -69,7 +77,7 @@ def check(output, teams_only=False):
         wicket_events=[dict(number=i+1,runs=(i+1)*12,balls=(i+1)*15,at=time.time()-60) for i in range(4)])
     first['last_wicket']={**copy.deepcopy(first['batters'][0]),'out_number':4}
     score.graphics.innings=[first];score.graphics.previous=copy.deepcopy(score.data)
-    app.state.devices.connected_snapshot=lambda:[dict(device_id='camera1',name='Synthetic camera',role='UMPIRE_POV')]
+    if not preview_only: app.state.devices.connected_snapshot=lambda:[dict(device_id='camera1',name='Synthetic camera',role='UMPIRE_POV')]
     score.packs.save({'team':dict(team='Pavilion XI',featured='Player 1',players=[dict(name='Player '+str(i+1),role='allrounder' if i<5 else 'bowler',captain=i==0,age='25',matches='12',runs='140',wickets='8',average='28.0',strike_rate='115.2',economy='5.3',best='40*') for i in range(11)]),
                       'details':dict(career_label='ODI CAREER',toss_team='Creek XI',toss_choice='field',coming_title='Pavilion XI v Creek XI',coming_subtitle='Tomorrow · Backyard Oval',sponsor_name='Local Club',sponsor_caption='Supporting backyard cricket')})
     server=uvicorn.Server(uvicorn.Config(app,host='127.0.0.1',port=0,log_config=None))
@@ -117,6 +125,30 @@ def check(output, teams_only=False):
             def shot(name):(output/name).write_bytes(base64.b64decode(call('Page.captureScreenshot',dict(format='png'))['data']))
 
             call('Page.enable');call('Runtime.enable')
+            if preview_only:
+                from scripts.match_day_preview_check import check_ui
+                results=check_ui(app,output,js,wait,size,navigate,shot)
+                (output/'results.json').write_text(json.dumps(results,indent=2),'utf-8')
+                print(json.dumps(dict(passed=len(results),output=str(output)),indent=2),flush=True)
+                return
+            if graphics_controls_only:
+                from scripts.graphics_controls_ui_check import check_ui
+                results=check_ui(app,output,js,wait,size,navigate,shot)
+                (output/'results.json').write_text(json.dumps(results,indent=2),'utf-8')
+                print(json.dumps(dict(passed=len(results),output=str(output)),indent=2),flush=True)
+                return
+            if universal_only:
+                from scripts.universal_ui_check import check_ui
+                results=check_ui(app,output,js,wait,size,navigate,shot)
+                (output/'results.json').write_text(json.dumps(results,indent=2),'utf-8')
+                print(json.dumps(dict(passed=len(results),output=str(output)),indent=2),flush=True)
+                return
+            if audience_only:
+                from scripts.statistics_ui_check import check_ui
+                results=check_ui(app,output,js,wait,size,navigate,shot)
+                (output/'results.json').write_text(json.dumps(results,indent=2),'utf-8')
+                print(json.dumps(dict(passed=len(results),output=str(output)),indent=2),flush=True)
+                return
             if teams_only:
                 results=check_team_delete(app,output,js,wait,size,navigate,shot)
                 (output/'results.json').write_text(json.dumps(results,indent=2),'utf-8')
@@ -138,7 +170,7 @@ def check(output, teams_only=False):
                             shot(route+'-overflow.png')
                             print(js("[...document.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect();return r.width&&r.right>innerWidth+1&&getComputedStyle(e).position!=='fixed'}).slice(0,12).map(e=>({tag:e.tagName,id:e.id,cls:e.className,w:e.getBoundingClientRect().width,right:e.getBoundingClientRect().right,text:e.textContent.slice(0,100)}))"),flush=True)
                         assert measure['scroll']<=width+1,(route,theme,measure)
-                        assert measure['nav']==10,(route,measure)
+                        assert measure['nav']==12,(route,measure)
                         assert measure['theme']==theme
                         results.append(dict(route=route,theme=theme,width=width,passed=True))
                         if width==1440:shot(route+'-'+theme+'.png')
@@ -184,7 +216,7 @@ def check(output, teams_only=False):
             wait("document.getElementById('settingsLiveViews')")
             js("document.querySelector('[name=appearance][value=dark]').click()")
             navigate('/')
-            wait("document.querySelectorAll('#desktopRail .nav').length===10")
+            wait("document.querySelectorAll('#desktopRail .nav').length===12")
             wait("document.getElementById('matchDayFrame').contentDocument?.getElementById('programCameraTiles')")
             js("document.querySelector('[data-view=settings]').click()")
             wait("document.getElementById('settingsFrame').contentDocument?.getElementById('settingsLiveViews')")
@@ -207,4 +239,4 @@ def check(output, teams_only=False):
 
 if __name__=='__main__':
     sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-    check(sys.argv[1], teams_only='--teams-only' in sys.argv)
+    check(sys.argv[1], teams_only='--teams-only' in sys.argv, audience_only='--audience-only' in sys.argv, universal_only='--universal-only' in sys.argv, graphics_controls_only='--graphics-controls-only' in sys.argv, preview_only='--preview-only' in sys.argv)

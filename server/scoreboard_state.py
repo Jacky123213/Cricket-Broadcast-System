@@ -44,6 +44,13 @@ def team_key(name):
     return ' '.join(name.split()).casefold()
 
 
+def abbreviation(value):
+    if not isinstance(value, str): raise ValueError('Team abbreviation must be text')
+    value = ' '.join(value.split()).upper()
+    if len(value)>8: raise ValueError('Use at most 8 characters for a team abbreviation')
+    return value
+
+
 def validate(data):
     if not isinstance(data, dict):
         raise ValueError('Expected a JSON object')
@@ -91,6 +98,7 @@ class State:
         self.program_history = deque(maxlen=400)
         self.error = ''
         self.teams = {}
+        self.match_info = None
         self.branding = copy.deepcopy(BRANDING_DEFAULT)
         branding_path = self.folder / 'branding.json'
         if branding_path.exists():
@@ -124,6 +132,7 @@ class State:
                     if not isinstance(profile, dict) or not isinstance(profile.get('name'), str):
                         raise ValueError('Invalid team profile')
                     validate({'team1': profile['name'], 'color1': profile['color'], 'logo1': profile['logo']})
+                    profile['abbreviation'] = abbreviation(profile.get('abbreviation',''))
                     if team_key(profile['name']): self.teams[team_key(profile['name'])] = profile
             except (ValueError, OSError, KeyError, TypeError) as exc:
                 self.error = 'Could not restore team appearance: ' + str(exc)
@@ -139,6 +148,16 @@ class State:
             self.teams.setdefault(team_key(name), {'name': name,
                 'color': self.data[f'color{slot}'], 'logo': self.data[f'logo{slot}']})
         self.data = self._team_appearance(self.data, {})
+        match_path = self.folder/'match-setup.json'
+        if match_path.exists():
+            try:
+                saved_match = json.loads(match_path.read_text('utf-8'))
+                if not isinstance(saved_match,dict): raise ValueError('Invalid match team settings')
+                if saved_match.get('match_id') == self.graphics.match_id:
+                    self._validate_match_teams(saved_match['home_team'],saved_match['away_team'])
+                    self.match_info = {k:saved_match[k] for k in ('match_id','home_team','away_team')}
+            except (ValueError, OSError, TypeError, KeyError) as exc:
+                self.error = 'Could not restore match teams: '+str(exc)
         # Previous-match numbers are never silently restored as current live data.
         if self.data['source'] == 'bluetooth':
             for k in ('runs','wickets','overs','batter1_runs','batter2_runs','batter1_name',
@@ -154,11 +173,14 @@ class State:
             graphics = self.graphics.snapshot(self.data, now)
             graphics['presentation'] = self.packs.snapshot()
             self._save_graphics()
-            result = dict(score=copy.deepcopy(self.data), status=self.status,
+            score = copy.deepcopy(self.data)
+            for slot in (1,2): score['abbr'+str(slot)] = self.teams.get(team_key(score['team'+str(slot)]),{}).get('abbreviation','')
+            result = dict(score=score, status=self.status,
                         last_packet=self.last_packet, last_score=self.last_score,
                         packet_count=self.count, logs=list(self.logs), error=self.error,
                         server_time=now, graphics=graphics, branding=copy.deepcopy(self.branding),
-                        team_appearance=[{'name': p['name'], 'color': p['color']} for p in self.teams.values()])
+                        team_appearance=[{'name': p['name'], 'color': p['color'], 'abbreviation':p.get('abbreviation','')} for p in self.teams.values()],
+                        match_setup=self.match_setup_snapshot())
             # Keep playout history in memory only; never include receiver logs.
             program = {k: result[k] for k in ('score','graphics','last_score','server_time')}
             if not self.program_history or now-self.program_history[-1]['server_time'] >= .1:
@@ -233,20 +255,53 @@ class State:
 
     def team_library(self):
         with self.lock:
-            return copy.deepcopy(sorted(self.teams.values(), key=lambda row: team_key(row['name'])))
+            return copy.deepcopy(sorted(({**p,'abbreviation':p.get('abbreviation','')} for p in self.teams.values()), key=lambda row: team_key(row['name'])))
+
+    @staticmethod
+    def _validate_match_teams(home, away):
+        validate({'team1':home, 'team2':away})
+        if not home.strip() or not away.strip() or team_key(home)==team_key(away):
+            raise ValueError('Choose two different home and away teams')
+
+    def match_setup_snapshot(self):
+        with self.lock:
+            if self.match_info and self.match_info['match_id']==self.graphics.match_id:
+                return copy.deepcopy(self.match_info)
+            first = self.graphics.innings[0] if self.graphics.innings else None
+            return {'match_id':self.graphics.match_id, 'home_team':first['team'] if first else self.data['team1'],
+                    'away_team':first['opposition'] if first else self.data['team2']}
+
+    def match_teams(self, changes):
+        if not isinstance(changes,dict) or set(changes)-{'home_team','away_team'}:
+            raise ValueError('Supply home and away team names')
+        with self.lock:
+            setup = {**self.match_setup_snapshot(), **changes}
+            self._validate_match_teams(setup['home_team'], setup['away_team'])
+            setup['home_team'],setup['away_team'] = setup['home_team'].strip(),setup['away_team'].strip()
+            pair = {team_key(setup[k]) for k in ('home_team','away_team')}
+            recorded = {team_key(i[k]) for i in self.graphics.innings for k in ('team','opposition')}
+            played = any((i.get('balls') or 0)>0 or (i.get('runs') or 0)>0 or (i.get('wickets') or 0)>0 for i in self.graphics.innings)
+            if played and recorded and pair!=recorded:
+                raise ValueError('Start a new match before replacing teams with recorded innings')
+            if pair!={team_key(self.data[k]) for k in ('team1','team2')}:
+                self.save({'team1':setup['home_team'],'team2':setup['away_team']})
+            write_json_atomic(self.folder/'match-setup.json',setup)
+            self.match_info = setup
+            return self.match_setup_snapshot()
 
     def save_team(self, profile):
         """Edit a named team without replacing the live score or its batting order."""
-        if not isinstance(profile, dict) or set(profile) != {'name', 'color', 'logo'}:
+        if not isinstance(profile, dict) or not {'name','color','logo'}<=set(profile) or set(profile)-{'name','color','logo','abbreviation'}:
             raise ValueError('Supply a team name, colour and logo')
         validate({'team1': profile['name'], 'color1': profile['color'], 'logo1': profile['logo']})
         name = profile['name'].strip()
         if not name: raise ValueError('Enter a team name')
+        if 'abbreviation' in profile: profile = {**profile,'abbreviation':abbreviation(profile['abbreviation'])}
         with self.lock:
             identity = team_key(name)
             if identity not in self.teams and len(self.teams) >= 100:
                 raise ValueError('At most 100 teams can be saved')
-            saved = {**profile, 'name': name}
+            saved = {**self.teams.get(identity,{}), **profile, 'name': name}
             self.teams[identity] = saved
             updated = dict(self.data)
             for slot in (1, 2):
@@ -311,6 +366,8 @@ class State:
         if not isinstance(command, dict): raise ValueError('Expected an action object')
         with self.lock:
             now = time.time()
+            if command.get('action')=='show' and command.get('kind')=='sponsor' and not self.packs.snapshot()['details']['sponsor_image']:
+                raise ValueError('Upload a sponsor banner in Graphics → Content before showing it')
             if command.get('action') == 'start_chase':
                 self.graphics.flush(now, force=True)
                 if self.graphics.phase != 'innings_break' or len(self.graphics.innings) != 1:
@@ -356,10 +413,14 @@ class State:
         with self.lock:
             self.decoder = ScoreDecoder()
             self.last_score = None
+            setup = self.match_setup_snapshot()
             config = copy.deepcopy(self.graphics.config)
             config.update(target=None, result_override='', power_surge_starts={})
             self.graphics = BroadcastGraphics()
             self.graphics.configure(config)
+            setup['match_id'] = self.graphics.match_id
+            write_json_atomic(self.folder/'match-setup.json',setup)
+            self.match_info = setup
             self._save_graphics()
 
     def set_status(self, text):

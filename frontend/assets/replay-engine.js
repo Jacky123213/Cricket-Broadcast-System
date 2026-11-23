@@ -2,13 +2,13 @@
 (function(root){
  'use strict';
  function fit(sw,sh,w,h){const s=Math.min(w/sw,h/sh);return {x:(w-sw*s)/2,y:(h-sh*s)/2,width:sw*s,height:sh*s};}
- function wait(video,event,action){return new Promise((resolve,reject)=>{let timer;const done=e=>{clearTimeout(timer);video.removeEventListener(event,ok);video.removeEventListener('error',bad);video.removeEventListener('drs-cancel',cancel);e?reject(e):resolve();};const ok=()=>done(),bad=()=>done(Error('Clip could not be decoded')),cancel=()=>done(Error('Player closed'));video.addEventListener(event,ok);video.addEventListener('error',bad);video.addEventListener('drs-cancel',cancel);timer=setTimeout(()=>done(Error('Clip loading timed out')),6000);try{action();}catch(e){done(e);}});}
+ function wait(video,event,action){return new Promise((resolve,reject)=>{let timer;const done=e=>{clearTimeout(timer);video.removeEventListener(event,ok);video.removeEventListener('error',bad);video.removeEventListener('drs-cancel',cancel);e?reject(e):resolve();};const ok=()=>done(),bad=()=>done(Error('Clip decode error '+(video.error?.code||'unknown'))),cancel=()=>done(Error('Player closed'));video.addEventListener(event,ok);video.addEventListener('error',bad);video.addEventListener('drs-cancel',cancel);timer=setTimeout(()=>done(Error('Clip '+event+' timed out')),6000);try{action();}catch(e){done(e);}});}
  function presented(video){
   if(typeof video.requestVideoFrameCallback!=='function')return Promise.resolve();
   return new Promise((resolve,reject)=>{
    let callback,timer,finished=false;
    const done=error=>{if(finished)return;finished=true;clearTimeout(timer);if(callback!==undefined)video.cancelVideoFrameCallback?.(callback);video.removeEventListener('error',bad);video.removeEventListener('drs-cancel',cancel);error?reject(error):resolve();};
-   const bad=()=>done(Error('Clip could not be decoded')),cancel=()=>done(Error('Player closed'));
+   const bad=()=>done(Error('Clip decode error '+(video.error?.code||'unknown'))),cancel=()=>done(Error('Player closed'));
    video.addEventListener('error',bad);video.addEventListener('drs-cancel',cancel);
    timer=setTimeout(()=>done(Error('Camera decoder did not present a frame')),3000);
    callback=video.requestVideoFrameCallback(()=>done());
@@ -18,7 +18,7 @@
   });
  }
  class AnglePlayer{
-  constructor(clips,makeVideo,status=()=>{},options={}){this.clips=clips;this.status=status;this.continuous=Boolean(options.continuous);this.retain=this.continuous||Boolean(options.seamless);this.onActive=options.onActive||(()=>{});this.slots=[0,1].map(()=>({video:makeVideo(),clip:null,promise:null}));this.active=null;this.desired=null;this.busy=false;this.closed=false;this.lastCorrection=0;this.failures=new Map();this.muted=true;this.ready=false;this.playing=false;this.waiting=false;this.error=null;}
+  constructor(clips,makeVideo,status=()=>{},options={}){this.clips=clips;this.status=status;this.continuous=Boolean(options.continuous);this.retain=this.continuous||Boolean(options.seamless);this.onActive=options.onActive||(()=>{});this.slots=[0,1].map(()=>({video:makeVideo(),clip:null,promise:null}));this.active=null;this.desired=null;this.busy=false;this.closed=false;this.lastCorrection=0;this.failures=new Map();this.muted=true;this.ready=false;this.playing=false;this.waiting=false;this.error=null;this.lastError=null;}
   get video(){return this.active?.video||this.slots[0].video;}
   end(slot){return Math.min(slot.clip.end_ms,Number.isFinite(slot.video.duration)?slot.clip.start_ms+slot.video.duration*1000:Infinity);}
   covers(slot,t){return slot?.clip&&slot.clip.start_ms<=t&&t<this.end(slot);}
@@ -69,7 +69,7 @@
        if(this.retain&&this.playing&&slot!==this.active)await presented(slot.video);
        if(this.closed)return;
        chosen=slot;break;
-      }catch(e){this.failures.set(clip.id,Date.now()+10000);this.error=e.message;this.status(e.message);}
+      }catch(e){this.failures.set(clip.id,Date.now()+10000);this.error=e.message;this.lastError=e.message;this.status(e.message);}
      }
      if(!chosen){if(this.active){this.active.video.pause();if(!this.continuous)this.active.video.hidden=true;}const exists=this.clips.some(c=>c.start_ms<=t&&t<c.end_ms);this.error=exists?(this.error||'Recorded clip cannot provide this frame'):null;this.status(exists?'Clip unavailable — press Play to retry':'No footage at this time');return;}
      if(this.active&&this.active!==chosen){this.active.video.pause();this.active.video.hidden=true;if(this.active.video.style)this.active.video.style.zIndex='0';}if(this.active!==chosen){this.active=chosen;this.onActive(chosen.video);}if(chosen.video.style)chosen.video.style.zIndex='1';this.error=null;
@@ -101,10 +101,10 @@
     if(next&&this.end(this.active)-t<3500){
      const standby=this.slots.find(s=>s!==this.active),handover=this.end(this.active);
      if(!standby.preparing&&standby.preparedFor!==next.id&&(this.failures.get(next.id)||0)<Date.now()){
-      standby.preparing=(async()=>{await this.load(standby,next);if(this.closed)return;const seconds=Math.max(0,(handover-next.start_ms)/1000);if(Math.abs(standby.video.currentTime-seconds)>.025)await wait(standby.video,'seeked',()=>{standby.video.currentTime=seconds;});if(standby.video.readyState<3)await wait(standby.video,'canplay',()=>{});standby.preparedFor=next.id;})().catch(()=>{this.failures.set(next.id,Date.now()+1500);}).finally(()=>{standby.preparing=null;});
+      standby.preparing=(async()=>{await this.load(standby,next);if(this.closed)return;const seconds=Math.max(0,(handover-next.start_ms)/1000);if(Math.abs(standby.video.currentTime-seconds)>.025)await wait(standby.video,'seeked',()=>{standby.video.currentTime=seconds;});if(standby.video.readyState<3)await wait(standby.video,'canplay',()=>{});standby.preparedFor=next.id;})().catch(error=>{this.lastError=error.message;this.failures.set(next.id,Date.now()+1500);}).finally(()=>{standby.preparing=null;});
      }
     }
-   }catch(e){this.ready=false;this.error=e.message;this.status('Clip load failed — press Play to retry: '+e.message);}
+   }catch(e){this.ready=false;this.error=e.message;this.lastError=e.message;this.status('Clip load failed — press Play to retry: '+e.message);}
    finally{this.waiting=false;this.busy=false;if(this.desired&&!this.closed)this.pump();}
   }
   retry(){this.failures.clear();this.error=null;}

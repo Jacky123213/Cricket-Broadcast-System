@@ -1,8 +1,19 @@
 'use strict';
 const $=id=>document.getElementById(id);
 let latest=null,chosenReport='',userChoseReport=false,scrubbing=false,pending=false;
-const names={scorebar:'Scoreboard',hidden:'Hidden',run_chart:'Runs per over',batting_card:'Batting card',bowling_card:'Bowling card',wicket_card:'Last wicket',innings_break:'Innings break',match_summary:'Match summary',lineup:'Team lineup',player_batting:'Batting career',player_bowling:'Bowling career',coming_up:'Coming up',toss:'Toss',sponsor:'Sponsor',win:'Result badge'};
+const names={scorebar:'Scoreboard',hidden:'Hidden',blank:'Blank overlay',run_chart:'Runs per over',batting_card:'Batting card',bowling_card:'Bowling card',wicket_card:'Last wicket',innings_break:'Innings break',match_summary:'Match summary',lineup:'Team lineup',player_batting:'Batting career',player_bowling:'Bowling career',coming_up:'Coming up',toss:'Toss',sponsor:'Sponsor',win:'Result badge'};
 const seconds=v=>Number.isFinite(v)?v.toFixed(1)+' s':'Unavailable';
+const previewPreference='cricket.match-day.preview.v1';
+function applyPreview(){
+  const live=$('previewMode').value==='live',frame=$('programPreview'),url='/broadcast?follow=1&clean=1&client=preview&audio=0'+(live?'&delay=0':'');
+  if(frame.getAttribute('src')!==url)frame.src=url;
+  frame.title=live?'Live camera preview · no added delay':'Delayed shared program preview';
+  $('previewHint').textContent=live?'Silent live view of the selected camera, including during on-air replays and reviews. OBS keeps its delayed program. A small camera/network delay is normal.':'Silent preview of the delayed program, including on-air replays and reviews. This choice affects only this screen.';
+  if(latest)renderProgram();
+}
+try{if(localStorage.getItem(previewPreference)==='live')$('previewMode').value='live';}catch{}
+$('previewMode').onchange=()=>{try{localStorage.setItem(previewPreference,$('previewMode').value);}catch{}applyPreview();};
+applyPreview();
 function error(message){$('deskError').textContent=message;}
 async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(6000)});const data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'Command rejected');return data;}
 async function command(body){if(pending)return;pending=true;try{const data=await post('/api/broadcast/program',body);if(latest){latest.program=data;renderProgram();}error('');}catch(e){error(e.message);}finally{pending=false;}}
@@ -28,6 +39,7 @@ function renderProgram(){const {program:p,devices}=latest.program,g=latest.score
   const cameraOnline=devices.some(d=>d.device_id===p.camera_id);
   $('programTally').textContent=p.mode==='replay'?'REPLAY · '+(p.playing?'PLAY':'PAUSED'):!p.camera_id?'NO CAMERA':cameraOnline?'LIVE · DELAYED':'CAMERA OFFLINE';$('programTally').classList.toggle('replay',p.mode==='replay');$('programTally').classList.toggle('warning',p.mode==='live'&&!cameraOnline);
   if(latest.program.drs&&['on_air','decision'].includes(latest.program.drs.phase)){$('programTally').textContent='UMPIRE REVIEW · '+(latest.program.drs.phase==='decision'?'DECISION':p.playing?'PLAY':'PAUSED');$('programCamera').disabled=true;}
+  if($('previewMode').value==='live')$('programTally').textContent='ON AIR: '+$('programTally').textContent;
   $('programTransport').hidden=p.mode!=='replay';const duration=p.review?p.review.end_ms-p.review.start_ms:0;
   $('programPosition').max=Math.max(0,duration-1);if(!scrubbing)$('programPosition').value=p.position_ms;
   if(document.activeElement!==$('programSpeed'))$('programSpeed').value=String(p.speed);$('programTime').textContent=(p.position_ms/1000).toFixed(1)+' / '+(duration/1000).toFixed(1)+' s';
@@ -36,7 +48,7 @@ function renderProgram(){const {program:p,devices}=latest.program,g=latest.score
   const age=latest.score.last_score===null?null:Math.max(0,latest.score.server_time-latest.score.last_score);$('scoreAge').textContent=s.source==='manual'?'Manual score · update age unavailable':age===null?'Bluetooth · no recognised score received':'Bluetooth score update '+Math.floor(age)+' s ago'+(age>30?' · check scoring device':'');
   const innings=g.innings,selector=$('graphicInnings'),rows=innings.map((i,n)=>[String(n),(n+1)+'. '+i.team]),old=selector.value;
   options(selector,rows.length?rows:[['0','Waiting for innings']],rows.some(([id])=>id===old)?old:String(Math.max(0,rows.length-1)));
-  document.querySelectorAll('[data-graphic],#surgeProgram').forEach(b=>b.disabled=!innings.length);
+  document.querySelectorAll('[data-graphic],#surgeProgram').forEach(b=>b.disabled=!innings.length&&b.dataset.graphic!=='blank');
   $('requestedGraphic').textContent=p.mode==='replay'?'Hidden during replay':'Requested: '+(names[g.active?.kind]||'Scoreboard')+(g.power_surge?' + Surge':'');
   if(latest.program.drs?.phase==='announced')$('requestedGraphic').textContent='Scoreboard · DECISION REVIEWED (other cards/Surge hidden)';
   $('surgeProgram').textContent=g.power_surge?'Power Surge off':'Power Surge on';$('surgeProgram').setAttribute('aria-pressed',String(g.power_surge));
@@ -46,18 +58,27 @@ function renderProgram(){const {program:p,devices}=latest.program,g=latest.score
 }
 function renderHealth(){const p=latest.program.program,clients=[...latest.health.clients].sort((a,b)=>(a.role==='obs'?0:1)-(b.role==='obs'?0:1)||a.report_age_ms-b.report_age_ms);
   if(!userChoseReport)chosenReport=clients.find(c=>c.role==='obs')?.client_id||clients.find(c=>c.role==='preview')?.client_id||clients[0]?.client_id||'';
-  const rows=clients.map(c=>[c.client_id,(c.role==='obs'?'OBS browser':c.role==='preview'?'Local preview':'Browser')+' · '+c.client_id.slice(-8)+(c.report_age_ms>3500?' · stale':'')]);
+  const rows=clients.map(c=>[c.client_id,(c.role==='obs'?'OBS browser':c.preview_mode==='live_camera'?'Live camera preview':c.role==='preview'?'Delayed program preview':'Browser')+' · '+c.client_id.slice(-8)+(c.report_age_ms>3500?' · stale':'')]);
   if(chosenReport&&!clients.some(c=>c.client_id===chosenReport))rows.unshift([chosenReport,'Selected output stopped reporting']);
   options($('outputClient'),rows.length?rows:[['','No output reports yet']],chosenReport);
   const report=clients.find(c=>c.client_id===chosenReport),stale=!report||report.report_age_ms>3500,matching=report&&report.revision===p.revision&&report.camera_id===(p.camera_id||'')&&report.mode===p.mode;
   $('healthSummary').textContent=stale?'OUTPUT STALE / OFFLINE':!matching?'APPLYING COMMAND':report.role!=='obs'?(report.state==='playing'?'LOCAL PREVIEW ONLY':'LOCAL · '+report.state.toUpperCase()):report.state==='playing'?'OBS PLAYING':report.state.toUpperCase();
   $('healthSummary').classList.toggle('warning',stale||!matching||report?.role!=='obs'||report?.state!=='playing');
+  if(!stale&&matching&&report?.preview_mode==='live_camera')$('healthSummary').textContent='LOCAL LIVE CAMERA · '+report.state.toUpperCase();
   $('outputIdentity').textContent=!report?'No report from this output. OBS must use the shared link.':(report.role==='obs'?'OBS-labelled browser report':'Local/browser report · not proof of OBS playback')+' · heartbeat '+seconds(report.report_age_ms/1000)+' ago'+(!matching?' · awaiting current program command':'');
+  if(report?.preview_mode==='live_camera')$('outputIdentity').textContent+=' · direct camera view; does not measure delayed program playback';
   const current=!stale&&matching?report:null;
-  $('healthPlayback').textContent=current?current.state:stale?'Unavailable · no recent report':'Awaiting command';
-  $('healthDelay').textContent=current?seconds(current.delay_seconds):'—';$('healthFootage').textContent=current?seconds(current.available_seconds):'—';$('healthHeadroom').textContent=current?seconds(current.headroom_seconds):'—';
-  $('healthDropped').textContent=current&&current.dropped_frames!==null?current.dropped_frames+' / '+current.total_frames:'Unavailable';
+  $('healthPlayback').textContent=current?(current.preview_suspended?'Preview paused while hidden':current.state):stale?'Unavailable · no recent report':'Awaiting command';
+  $('healthDelay').textContent=current?seconds(current.delay_seconds)+(current.target_delay_seconds!=null?' (target '+seconds(current.target_delay_seconds)+')':''):'—';$('healthFootage').textContent=current?seconds(current.available_seconds):'—';$('healthHeadroom').textContent=current?seconds(current.headroom_seconds):'—';
+  if(current?.preview_mode==='live_camera')$('healthDelay').textContent='No added buffer · latency not measured';
+  $('healthPlayback').title=current?.last_decode_error?'Last decoder error: '+current.last_decode_error:'';
+  if(current?.state==='buffering'&&current.last_decode_error)$('healthPlayback').textContent+=' · '+current.last_decode_error;
+  if(current?.recovery_attempts)$('healthPlayback').textContent+=' · '+current.recovery_attempts+' recoveries';
+  $('healthFootage').title=current?.cached_seconds!=null?seconds(current.cached_seconds)+' downloaded as complete local files':'';
+  $('healthDropped').textContent=current&&current.dropped_frames!==null?current.dropped_frames+' / '+current.total_frames+' during playback'+(current.preload_dropped_frames!=null?' · warm-up '+current.preload_dropped_frames+' / '+current.preload_total_frames:''):'Unavailable';
   for(const [id,key] of [['healthLate','late_clips'],['healthDecode','decode_errors'],['healthRequests','poll_errors']])$(id).textContent=current?String(current[key]):'—';
+  if(current?.download_errors!=null)$('healthRequests').textContent+=' manifest / '+current.download_errors+' clip';
+  $('healthRequests').title=current?[(current.clip_download_ms!=null?'Last clip download: '+Math.round(current.clip_download_ms)+' ms':''),(current.last_download_error?'Last download error: '+current.last_download_error:'')].filter(Boolean).join(' · '):'';
   $('healthFrame').textContent=current&&Number.isFinite(current.last_frame_age_ms)?seconds(current.last_frame_age_ms/1000)+(current.state==='paused'?' · intentionally paused':' ago'):current?'Unavailable':'—';
   $('healthGraphic').textContent=current?((names[current.graphics_kind]||'Awaiting graphics report')+(current.graphics_surge?' + Power Surge':'')):'—';
   const measured=current?.meter_state==='active'&&Number.isFinite(current.meter_dbfs);

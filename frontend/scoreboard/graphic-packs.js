@@ -16,6 +16,7 @@ window.FoxODI=(()=>{'use strict';
   const active=g.active,full=$('statGraphic'),small=$('breakGraphic'),wicket=$('wicketGraphic'),surge=$('powerSurge'),signature=JSON.stringify([g,s.bowler,s.team1,s.team2,s.logo1,s.logo2]);if(signature===last)return lastFull;last=signature;lastFull=false;
   for(const e of [full,small,wicket,surge])if(e)e.hidden=true;
   if(!s.visible)return false;
+  if(active?.kind==='blank'){lastFull=true;return true;}
   if(g.power_surge&&g.innings.length){const current=g.innings.at(-1);surge.textContent='POWER SURGE';surge.style.backgroundColor=current.color;surge.style.color=ink(colour(current.color));surge.hidden=false;}
   if(!active)return false;
   const kind=active.kind,i=(['batting_card','bowling_card'].includes(kind)?g.innings.at(-1):g.innings[active.innings])||g.innings.at(-1),p=g.presentation||{details:{},teams:[]},d=p.details||{},team=active.team||(kind==='bowling_card'?i?.opposition:i?.team)||s.team1,a=appearance(g,s,team),profile=p.teams?.find(t=>key(t.team)===key(a.team));
@@ -25,10 +26,10 @@ window.FoxODI=(()=>{'use strict';
    if(kind==='innings_break'&&i)badge=mini(a,'INNINGS BREAK',i.team,total(i));
    if(kind==='toss'){const toss=appearance(g,s,d.toss_team);theme(small,toss);badge=mini(toss,'TOSS',d.toss_team||'Toss details unavailable',d.toss_team?'WINS & '+(d.toss_choice==='field'?'FIELDS':'BATS'):'');}
    if(kind==='win'){const winning=g.innings.find(v=>(g.result||'').startsWith(v.team+' wins')),win=winning?appearance(g,s,winning.team):a;theme(small,win);badge=mini(win,'MATCH RESULT',g.result||'Result unavailable','');}
-   if(kind==='coming_up'){badge=mini(a,'COMING UP',d.coming_title||`${s.team1} v ${s.team2}`,d.coming_subtitle||'');if(d.coming_image)small.append(image(d.coming_image,'fox-coming-image','Coming up'));}
+   if(kind==='coming_up'){const neutral={team:'',logo:'',color:'#f0f3ff'};theme(small,neutral);badge=mini(neutral,'COMING UP',d.coming_title||`${s.team1} v ${s.team2}`,d.coming_subtitle||'');if(d.coming_image)small.append(image(d.coming_image,'fox-coming-image','Coming up'));}
    if(badge){small.append(badge);small.hidden=false;}surge.hidden=true;lastFull=true;return true;
   }
-  if(kind==='sponsor'){const e=n('div','fox-sponsor-content');if(d.sponsor_image)e.append(image(d.sponsor_image,'fox-sponsor-logo',d.sponsor_name));e.append(n('strong','',d.sponsor_name||'Sponsor'),n('span','',d.sponsor_caption||''));small.append(e);small.hidden=false;return false;}
+  if(kind==='sponsor'){if(!d.sponsor_image)return false;const e=n('div','fox-sponsor-content');e.append(image(d.sponsor_image,'fox-sponsor-logo',d.sponsor_name||'Sponsor banner'));small.append(e);small.hidden=false;return false;}
   if(kind==='player_batting'||kind==='player_bowling'||kind==='wicket_card'){
    const isWicket=kind==='wicket_card',name=active.player||profile?.featured||profile?.players?.[0]?.name||(kind==='player_bowling'?s.bowler:s.batter1_name),row=isWicket?i?.last_wicket:profile?.players.find(r=>r.name===name);
    if(isWicket&&!row)return false;const title=n('header','fox-player-heading');if(a.logo)title.append(image(a.logo,'fox-mini-logo',a.team));const copy=n('div');copy.append(n('strong','',isWicket?row.name:name||'Player details unavailable'),n('small','',isWicket?row.dismissal||'Out':d.career_label||'ODI CAREER'));title.append(copy);

@@ -1,4 +1,4 @@
-/* Shared structure for the ten operator sections. Dark and light use the same DOM. */
+/* Shared structure for the operator sections. Dark and light use the same DOM. */
 :root {--rail-width:208px;--app-input:#101612;--app-hover:#242f27;--app-selected:#344322;--app-accent-text:#10170c;--app-panel-2:#1b231e;--app-danger:#ff9292;--app-shadow:0 2px 12px #0001;--app-control-size:14px}
 :root[data-theme="light"] {--app-bg:#f4f5f1;--app-panel:#fff;--app-line:#ccd3cc;--app-text:#17251d;--app-muted:#66736a;--app-accent:#235d41;--app-input:#fff;--app-hover:#e9eee7;--app-selected:#dce9d8;--app-accent-text:#fff;--app-panel-2:#edf1eb;--app-danger:#a32930;--panel-2:var(--app-panel-2);--red-dark:#19492f}
 :root[data-text="large"] {--app-control-size:16px}

@@ -1,4 +1,17 @@
-# Graphics presets — 1.9.0-rc.1
+# Graphics presets — 1.12.0-rc.2
+
+Use **Graphics → Graphic library** for private previews, then **Show graphic** to
+take one on air. **Blank overlay** is available in both packs and removes all
+overlay elements and the broadcast watermark until Clear or another manual
+graphic. Its held state survives restarting Studio. It does not stop the video.
+
+Coming Up is the same neutral/default style in both packs with no team choice.
+Under **Graphics → Content**, upload a **Sponsor banner** to fill the whole row;
+there is no description. A 1920 × 135 PNG/JPEG is suggested. All image uploads
+are limited to 1 MB and show suggested dimensions beside the picker.
+
+Set team abbreviations in **Teams & Players**; they follow the team into either
+scorebar slot. Full names, colours and logos remain associated with that team.
 
 Choose **Scoreboard → Graphics pack → BBL / FOX ODI → Apply graphics pack**.
 BBL is the original pack and remains the default when upgrading. Match Day also

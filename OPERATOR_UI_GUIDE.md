@@ -1,6 +1,6 @@
-# Operator interface · 1.10.0-rc.2
+# Operator interface · 1.12.0-rc.2
 
-The desktop app and standalone iPad control pages share ten sections. The host,
+The desktop app includes twelve sections; standalone controls share its navigation. The host,
 port, HTTPS certificate and existing camera/umpire/broadcast URLs are unchanged.
 
 | Section | Controls |
@@ -8,8 +8,10 @@ port, HTTPS certificate and existing camera/umpire/broadcast URLs are unchanged.
 | Match Day | Program camera, delayed live/replay, graphics, review and output health |
 | Replay Studio | Existing synchronized evidence viewer, timeline, zoom, audio and explicit review broadcast |
 | Scoreboard | Live score, scoped score corrections, innings statistics and dismissals |
+| Live Match | Read-only current scorecard, ball by ball, graphs, summary and optional clips; LAN sharing |
 | Match Setup | Match details, rules, toss, playing lineups, innings/chase/finish actions |
 | Teams & Players | Reusable named team colours/logos, rosters, roles, captain, portraits and career values |
+| Statistics | Submit finished results, map players, replace corrections, withdraw and browse career records |
 | Graphics | BBL/FOX ODI, private preview, explicit Show/Clear, strip messages and broadcast logo |
 | Highlights | Saved clip library, capture-event choices, pre/post duration, storage and fielding break reel |
 | Connections | PC camera desk, device/umpire/LAN links, QR, Bluetooth and installed-PC approvals |
@@ -17,6 +19,11 @@ port, HTTPS certificate and existing camera/umpire/broadcast URLs are unchanged.
 | Help | Health, guides, diagnostics and optional receiver-log download |
 
 ## Appearance and compact controls
+
+**Match Day → Preview view** switches this screen between the delayed program
+and the selected camera's current picture. Live adds no broadcast buffer and
+stays live during on-air replays/reviews. OBS follows the delayed program. The
+choice is remembered per browser/device, and both previews remain silent.
 
 Dark is the default. **Settings → Appearance → Light** keeps the same layout and
 wording, using the off-white, sage and dark-green palette. Device setting follows
@@ -33,6 +40,18 @@ Studio viewers when off. A private local review closes; server/camera/Bluetooth/
 OBS operation continues. Saved settings and drafts in other sections remain.
 
 ## Teams versus playing lineups
+
+**Match Setup → Teams for this match** uses Home and Away. These labels stay fixed
+when the batting side swaps. Use Scoreboard or the scoring app to change who is
+batting. After scoring starts, start a new match to replace the participating
+teams. **Teams & Players → Abbreviation for scorebar** accepts up to eight
+characters; leave it blank to show the full name. Full names remain on cards.
+
+For a person who plays for several fantasy teams, enable **Universal player** on
+their existing record in Statistics. In each team's roster, select that same
+universal player and use **Add to this team**. For a row already in the roster,
+link its **Details → Saved player record** instead. Submitted results update one
+career profile across the teams; a shared head-to-head game counts once.
 
 To delete a saved team, select it in **Teams & Players**, press **Delete team** and
 confirm its name. This removes its saved colours/logo, roster and playing-lineup
@@ -67,6 +86,10 @@ edit; coordinate it with other operators.
 
 The previous combined form remains at `/scoreboard?legacy=1` for saved workflows.
 The public `/live` and `/ball-by-ball` pages retain their audience navigation.
+Their layout and appearance now follow the app. The new read-only `/stats` page
+shows confirmed player/team records. See [STATISTICS_GUIDE.md](STATISTICS_GUIDE.md)
+for the end-of-match popup, pending results and corrections. Completed games are
+not added to career totals until an operator submits them.
 
 Installing the new Setup.exe is required to update an installed copy. The source
 build folder does not silently replace an already-installed program. Upgrades

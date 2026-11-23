@@ -94,9 +94,9 @@ def check(output):
                 time.sleep(.25)
             results=[]
             for context in cameras:
-                result=json.loads(evaluate(context,"JSON.stringify({device:deviceId,visibility:document.visibilityState,status:document.querySelector('#connectionPill span:last-child').textContent,audio:previewStream.getAudioTracks().length,direct:previewStream===staticStream,codec:rollingRecorder.mime,recorder:document.getElementById('recordingStatus').textContent})"))
+                result=json.loads(evaluate(context,"JSON.stringify({device:deviceId,visibility:document.visibilityState,status:document.querySelector('#connectionPill span:last-child').textContent,audio:previewStream.getAudioTracks().length,direct:previewStream===staticStream,codec:rollingRecorder.mime,timing_track:Boolean(rollingRecorder.timing),recorder:document.getElementById('recordingStatus').textContent})"))
                 assert result['status']=='Camera live' and result['audio']==0 and result['direct']
-                assert result['visibility']=='hidden' and 'opus' not in result['codec']
+                assert result['visibility']=='hidden' and ('opus' not in result['codec'] or result['timing_track'])
                 clips=[c for c in app.state.replay_store.clips.values() if c['device_id']==result['device']]
                 assert len(clips)>=3,f'No actual replay uploads: {result}'
                 assert max(c['end_ms'] for c in clips)>time.time()*1000-7000

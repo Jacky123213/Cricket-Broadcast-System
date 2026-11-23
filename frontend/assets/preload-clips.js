@@ -1,5 +1,5 @@
 /* Complete, cancellable local downloads for finite reviews/highlights only.
-   Live broadcast continues using its existing rolling five-second buffer. */
+   Live broadcast continues using its adaptive rolling 8–10 second buffer. */
 (function(root){'use strict';
  class ClipCache {
   constructor(report=()=>{},options={}){this.report=report;this.maxBytes=options.maxBytes||256*1024*1024;this.controller=new AbortController();this.files=new Map();this.bytes=0;this.completed=0;this.ready=false;this.closed=false;}

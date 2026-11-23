@@ -99,12 +99,16 @@ def test_replay_failure_is_atomic_and_end_holds_until_return_live(desk):
 
 def test_health_is_player_specific_stale_bounded_and_not_persisted(desk):
     c,app,clock,roster=desk
-    report={'client_id':'obs-test-123','role':'obs','camera_id':'umpire','revision':1,'mode':'live','state':'playing','delay_seconds':5.2,'muted':False,'audio_present':True,'meter_dbfs':-18,'meter_state':'active','dropped_frames':3,'total_frames':1000}
+    report={'client_id':'obs-test-123','role':'obs','camera_id':'umpire','revision':1,'mode':'live','state':'playing','delay_seconds':8.2,'muted':False,'audio_present':True,'meter_dbfs':-18,'meter_state':'active','dropped_frames':3,'total_frames':1000,'target_delay_seconds':8,'cached_seconds':14,'clip_download_ms':20,'download_errors':1,'recovery_attempts':2,'last_decode_error':'Clip decode error 3','last_download_error':'Clip HTTP 503','graphics_kind':'blank'}
     assert c.post('/api/broadcast/health',json=report).status_code==200
     clock[0]+=5000
     row=c.get('/api/broadcast/health').json()['clients'][0]
     assert row['report_age_ms']==5000 and row['meter_dbfs']==-18
+    assert row['target_delay_seconds']==8 and row['cached_seconds']==14 and row['recovery_attempts']==2
+    assert row['last_download_error']=='Clip HTTP 503' and row['graphics_kind']=='blank'
     for patch in ({'meter_dbfs':'NaN'},{'dropped_frames':True},{'late_clips':-1},{'role':'made-up'},{'client_id':'bad/id'},{'raw_audio':'private'}):
+        assert c.post('/api/broadcast/health',json={**report,**patch}).status_code==422
+    for patch in ({'last_decode_error':'x'*241},{'last_download_error':'x'*241},{'target_delay_seconds':-1},{'cached_seconds':-1},{'download_errors':True},{'recovery_attempts':-1}):
         assert c.post('/api/broadcast/health',json={**report,**patch}).status_code==422
     for n in range(31):
         assert c.post('/api/broadcast/health',json={**report,'client_id':f'preview-test-{n}'}).status_code==200
@@ -120,6 +124,23 @@ def test_available_footage_counts_overlap_once_and_program_does_not_persist(desk
     upload(c,start=986000,end=994000)
     assert c.get('/api/broadcast/camera/umpire').json()['available_seconds']==14
     assert 'clients' not in app.state.scoreboard.graphics.export()
+
+
+def test_replay_window_follows_fresh_obs_delay_and_ignores_stale_or_unapplied_reports(desk):
+    c,app,clock,roster=desk
+    p=c.get('/api/broadcast/program').json()['program'];b=app.state.broadcast_desk
+    assert b.live_playout_end(clock[0])==clock[0]-8000
+    report=dict(client_id='obs-buffer-123',role='obs',camera_id=p['camera_id'],revision=p['revision'],mode='live',state='playing',delay_seconds=10.2,last_frame_age_ms=100)
+    assert c.post('/api/broadcast/health',json={**report,'client_id':'direct-live-123','role':'preview','preview_mode':'live_camera'}).status_code==200
+    assert b.live_playout_end(clock[0])==clock[0]-8000,'direct camera previews must not set the on-air replay timestamp'
+    assert c.post('/api/broadcast/health',json=report).status_code==200
+    assert b.live_playout_end(clock[0])==clock[0]-10200
+    c.post('/api/broadcast/health',json={**report,'client_id':'preview-faster-123','role':'preview','delay_seconds':8})
+    assert b.live_playout_end(clock[0])==clock[0]-10200
+    clock[0]+=4000
+    assert b.live_playout_end(clock[0])==clock[0]-8000
+    c.post('/api/broadcast/health',json={**report,'revision':p['revision']+1})
+    assert b.live_playout_end(clock[0])==clock[0]-8000
 
 
 def prepare_review(c, **changes):

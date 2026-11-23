@@ -38,6 +38,17 @@ class PlayerReport(BaseModel):
     last_frame_age_ms: float | None = Field(default=None, ge=0, le=3600000, allow_inf_nan=False)
     dropped_frames: StrictInt | None = Field(default=None, ge=0, le=1000000000)
     total_frames: StrictInt | None = Field(default=None, ge=0, le=1000000000)
+    preload_dropped_frames: StrictInt | None = Field(default=None, ge=0, le=1000000000)
+    preload_total_frames: StrictInt | None = Field(default=None, ge=0, le=1000000000)
+    preview_suspended: bool = False
+    preview_mode: Literal['program','live_camera'] = 'program'
+    target_delay_seconds: float | None = Field(default=None, ge=0, le=60, allow_inf_nan=False)
+    cached_seconds: float | None = Field(default=None, ge=0, le=3600, allow_inf_nan=False)
+    clip_download_ms: float | None = Field(default=None, ge=0, le=3600000, allow_inf_nan=False)
+    download_errors: StrictInt = Field(default=0, ge=0, le=1000000000)
+    recovery_attempts: StrictInt = Field(default=0, ge=0, le=1000000000)
+    last_decode_error: str | None = Field(default=None, max_length=240)
+    last_download_error: str | None = Field(default=None, max_length=240)
     late_clips: StrictInt = Field(default=0, ge=0, le=1000000000)
     decode_errors: StrictInt = Field(default=0, ge=0, le=1000000000)
     poll_errors: StrictInt = Field(default=0, ge=0, le=1000000000)
@@ -45,7 +56,7 @@ class PlayerReport(BaseModel):
     audio_present: bool = False
     meter_dbfs: float | None = Field(default=None, ge=-120, le=0, allow_inf_nan=False)
     meter_state: Literal['active', 'suspended', 'unavailable', 'no_audio'] = 'unavailable'
-    graphics_kind: Literal['scorebar','hidden','run_chart','batting_card','bowling_card','wicket_card','innings_break','match_summary','lineup','player_batting','player_bowling','coming_up','toss','sponsor','win'] | None = None
+    graphics_kind: Literal['scorebar','hidden','blank','run_chart','batting_card','bowling_card','wicket_card','innings_break','match_summary','lineup','player_batting','player_bowling','coming_up','toss','sponsor','win'] | None = None
     graphics_surge: bool = False
 
 
@@ -103,6 +114,19 @@ class BroadcastDesk:
         result['review'] = copy.deepcopy({k:v for k,v in review.items() if k!='audio'}) if review else None
         return dict(program=result, devices=roster, server_ms=at, drs=self.review.snapshot())
 
+    def live_playout_end(self, at):
+        """End replay windows at a fresh displayed frame, or the default delay."""
+        p=self.program
+        fresh=[r for r in self.reports.values() if 0<=at-r['received_ms']<=3500
+               and r['mode']=='live' and r['state']=='playing' and not r.get('preview_suspended')
+               and r.get('preview_mode','program')=='program'
+               and r['revision']==p['revision'] and r['camera_id']==p['camera_id']
+               and r.get('delay_seconds') is not None and r.get('last_frame_age_ms') is not None
+               and r['last_frame_age_ms']<1500]
+        if not fresh: return at-8000
+        report=min(fresh,key=lambda r:(r['role']!='obs',at-r['received_ms']))
+        return min(at-8000,report['received_ms']-report['delay_seconds']*1000)
+
     async def command(self, command):
         async with self.lock:
             self.snapshot()
@@ -125,7 +149,7 @@ class BroadcastDesk:
                 id = p['camera_id']
                 clips = [c for c in self.replay.clips.values() if c['device_id']==id and c['end_ms']>at-90000]
                 if not clips: raise HTTPException(409,'No recorded footage for the selected camera')
-                end = min(max(c['end_ms'] for c in clips)-1, at-5000)
+                end = min(max(c['end_ms'] for c in clips)-1, self.live_playout_end(at))
                 start = end-command.seconds*1000
                 if not any(c['end_ms']>start and c['start_ms']<end for c in clips):
                     raise HTTPException(409,'Selected camera has no footage in that replay window')

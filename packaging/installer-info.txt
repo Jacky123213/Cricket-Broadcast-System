@@ -1,10 +1,32 @@
-Cricket Broadcast System 1.10.0-rc.2 — Windows prerelease
+Cricket Broadcast System 1.12.0-rc.2 — Windows prerelease
+
+Match Day now offers Delayed program or Live camera (no added delay) for this
+screen's preview. The choice is remembered per browser and keeps OBS delayed.
+
+Adds blank overlays in both packs, team abbreviations, fixed Home/Away match
+setup, neutral Coming Up and full-width image-only sponsor banners. Image pickers
+show the file limit and suggested dimensions.
+
+Live playback uses complete-file downloads, bounded decoder recovery and an
+adaptive 8–10 second buffer. Firefox video-only capture has a private silent
+timing track; this does not enable a microphone. Health reports include download
+errors, completed local footage and recovery counts.
+
+Adds Universal player: share one existing career record across fantasy teams.
+Enable it in Statistics, then add the same saved player to each team roster.
+Both teams can contribute stats in one match while the game counts once.
+Existing player IDs and saved totals are preserved.
+
+Adds end-of-match results review, permanent player/team statistics and a read-only
+local /stats page. Live Match now has an app shortcut, a matching dark/light layout
+and shareable LAN links. Hidden local previews release their decoders; OBS remains
+independent. See STATISTICS_GUIDE.md for submission and correction behaviour.
 
 Adds Delete team in Teams & Players. Confirm to remove a saved team, its roster
 and playing-lineup selections. Teams used in the current match or by an on-air
 graphic are protected. Current scores and other teams stay intact.
 
-Adds ten organised operator sections and the dark/light interface. Use Settings
+Adds twelve organised operator sections and the dark/light interface. Use Settings
 for appearance and local previews, Match Setup for rules and playing lineups,
 Teams & Players for reusable rosters, and Graphics for private previews and output.
 Installed-PC approvals are now under Connections on the host PC.

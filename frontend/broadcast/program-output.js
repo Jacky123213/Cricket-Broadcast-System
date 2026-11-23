@@ -3,22 +3,27 @@
   'use strict';
   const params=new URLSearchParams(location.search);if(params.get('follow')!=='1')return;
   const $=id=>document.getElementById(id),role=params.get('client')==='obs'?'obs':params.get('client')==='preview'?'preview':'browser',silent=role==='preview'||params.get('audio')==='0';
+  const livePreview=role==='preview'&&params.get('delay')==='0';
   const clientId=role+'-'+window.DRS.createClientId(),meter=new window.DRSProgramHealth.AudioMeter();
   let state=null,engine=null,key='',closed=false,blocked=false,meterRequested=false,pollTimer=null,reportTimer=null,graphics={kind:null,surge:false},programError=false;
   let outputToken=0,pendingEmpty=['Program camera not ready','Check the selected camera and replay recorder.'];
+  let parentPreviewActive=true,suspended=role==='preview'&&document.hidden,visibilityGeneration=0;
   const transition=new window.DRSProgramTransition($('bufferedStage'),()=>empty(...pendingEmpty));
   let lastData=null,lastMidpoint=0,reviewAnnounced=false;
-  const reviewOutput=window.DRSReviewOutput?new window.DRSReviewOutput($('reviewStage'),{clientId,role,onFrame:f=>frame(f,reviewOutput),onAudioVideo:video=>{if(engine===reviewOutput)meter.select?.(video);},onMute:()=>{if(engine===reviewOutput)onMute();},onStatus:text=>{if(engine===reviewOutput)$('status').textContent=text;},onReady:()=>{if(lastData&&!closed)apply(lastData,lastMidpoint);}}):null;
-  $('controls').hidden=params.get('clean')==='1';$('program').hidden=true;$('graphic').src='/overlay?program=1';
+  let reviewOutput=null;
+  function createReviewOutput(){if(livePreview||!window.DRSReviewOutput)return null;const output=new window.DRSReviewOutput($('reviewStage'),{clientId,role,onFrame:f=>frame(f,output),onAudioVideo:video=>{if(engine===output)meter.select?.(video);},onMute:()=>{if(engine===output)onMute();},onStatus:text=>{if(engine===output)$('status').textContent=text;},onReady:()=>{if(reviewOutput===output&&lastData&&!closed&&!suspended)apply(lastData,lastMidpoint);}});return output;}
+  if(!suspended)reviewOutput=createReviewOutput();
+  $('controls').hidden=params.get('clean')==='1';$('program').hidden=true;$('graphic').src=livePreview?'/overlay':'/overlay?program=1';
+  $('graphic').addEventListener('load',()=>{if(suspended)$('graphic').contentWindow?.postMessage({type:'broadcast-suspend'},location.origin);});
   function empty(title,detail=''){pendingEmpty=[title,detail];if(transition.holding){$('empty').hidden=true;return;}const box=$('empty');box.querySelector('strong').textContent=title;box.querySelector('span').textContent=detail;box.hidden=false;}
   function muted(){return silent||Boolean(state?.muted)||blocked;}
   function audioSettings(){if(!engine)return;meter.select?.(engine.audioVideo||engine.player?.active?.video||null);meter.mute(muted());const managed=!blocked&&meter.context?.state==='running'&&videos().every(v=>meter.nodes.has(v));engine.setMuted(managed?false:muted());$('mute').textContent=state?.muted?'Unmute program audio':'Mute program audio';}
   function videos(){return engine?.videos?.()||engine?.player?.slots.map(s=>s.video)||[];}
   async function enableMeter(){const list=videos();if(!list.length)return false;meterRequested=true;const active=await meter.start(list);if(closed)return false;const suspended=!active&&meter.context?.state==='suspended';$('audioNotice').hidden=active||silent||!suspended;if(suspended){blocked=true;$('audioNotice').textContent='Retry enabling audio / meter · OBS Interact';}if(active)blocked=false;audioSettings();if(active)engine?.resume?.();return active;}
   function onMute(){blocked=true;$('audioNotice').hidden=false;$('audioNotice').textContent='Enable camera audio / meter · open OBS Interact';audioSettings();}
-  function frame(f,owner=engine){if(!engine||engine!==owner)return;transition.reveal();engine.hasAudio=Boolean(f.audio);$('empty').hidden=true;$('status').textContent=state?.mode==='replay'?'REPLAY · '+(state.playing?'PLAYING':'PAUSED'):'DELAYED '+f.delay.toFixed(1)+' s';$('sound').textContent=engine.hasAudio?(muted()?'Audio track received · muted here':'Audio track received · meter needed to verify activity'):'No audio track in displayed clip';
+  function frame(f,owner=engine){if(!engine||engine!==owner)return;transition.reveal();engine.hasAudio=Boolean(f.audio);$('empty').hidden=true;$('status').textContent=livePreview?'LIVE CAMERA · no added delay':state?.mode==='replay'?'REPLAY · '+(state.playing?'PLAYING':'PAUSED'):'DELAYED '+f.delay.toFixed(1)+' s';$('sound').textContent=engine.hasAudio?(muted()?'Audio track received · muted here':'Audio track received · meter needed to verify activity'):'No audio track in displayed picture';
     if(engine.hasAudio&&!meterRequested&&!silent&&!blocked){$('audioNotice').hidden=false;$('audioNotice').textContent='Enable program audio meter · OBS Interact (setup)';}
-    if(state?.mode==='live')$('graphic').contentWindow?.postMessage({type:'broadcast-time',at:f.at/1000},location.origin);
+    if(!livePreview&&state?.mode==='live')$('graphic').contentWindow?.postMessage({type:'broadcast-time',at:f.at/1000},location.origin);
   }
   class ReplayOutput {
     constructor(program,local){this.closed=false;this.hasAudio=false;this.metrics=new window.DRSProgramHealth.PlaybackHealth();this.clips=program.review.clips.filter(c=>c.device_id===program.camera_id);this.player=new window.DRSPlayback.AnglePlayer(this.clips,()=>{const v=document.createElement('video');v.className='program-video';v.playsInline=true;v.preload='auto';v.hidden=true;v.muted=true;v.setAttribute('aria-label','Shared program replay');const native=v.play.bind(v);v.play=async()=>{try{return await native();}catch(e){if(e.name==='NotAllowedError'&&!v.muted&&!this.closed){this.setMuted(true);onMute();return native();}throw e;}};$('bufferedStage').append(v);return v;},text=>{if(text)$('status').textContent=text;},{onActive:video=>meter.select?.(video)});this.lastFrame=null;this.apply(program,local);this.timer=setInterval(()=>this.tick(),100);}
@@ -34,7 +39,17 @@
     destroy(){this.closed=true;clearInterval(this.timer);this.player.destroy();}
   }
   function stop(hold=false){outputToken++;if(hold)transition.hold(engine?.player?.active?.video||null);else transition.clear();if(engine===reviewOutput)reviewOutput?.setOnAir(false);else engine?.destroy();engine=null;meter.reset();graphics={kind:null,surge:false};}
-  function apply(data,midpoint){const p=data.program,roster=data.devices;state=p;programError=false;lastData=data;lastMidpoint=midpoint;
+  function apply(data,midpoint){if(closed||suspended)return;const p=data.program,roster=data.devices;state=p;programError=false;lastData=data;lastMidpoint=midpoint;
+    if(livePreview){
+      const nextKey=['live-camera',p.camera_id,p.retry_token].join('|'),available=roster.some(d=>d.device_id===p.camera_id);
+      if(nextKey!==key||!available&&engine){stop(true);key=nextKey;}
+      $('graphic').hidden=!$('showGraphic').checked;$('replayBadge').hidden=true;$('drsAnnouncement').hidden=true;
+      if(!available){empty(p.camera_id?'Selected live camera offline':'Waiting for a program camera','Choose a connected camera in Match Day.');$('status').textContent='LIVE CAMERA OFFLINE';return;}
+      if(!engine){const token=outputToken;empty('Connecting live camera','No broadcast buffer is added to this preview.');
+        engine=new window.DRSDirectPreview(p.camera_id,$('bufferedStage'),{onFrame:f=>{if(token===outputToken)frame(f);},onVideo:video=>{if(token===outputToken){meter.select?.(video);if(meterRequested)enableMeter().catch(()=>{});}},onStatus:message=>{if(token===outputToken)$('status').textContent=message;},onBuffering:()=>{if(token===outputToken)empty('Live camera reconnecting','Check the selected camera and network.');}});
+      }
+      audioSettings();return;
+    }
     const fullReview=Boolean(data.drs&&['on_air','decision'].includes(data.drs.phase)&&p.review_id===data.drs.id);
     reviewAnnounced=data.drs?.phase==='announced';
     if(engine===reviewOutput&&(!fullReview||reviewOutput?.id!==data.drs?.id))stop(true);
@@ -55,7 +70,7 @@
     if(nextKey!==key||!available&&engine){stop(true);key=nextKey;}
     if(!available){empty(p.camera_id?'Selected program camera offline':'Waiting for a program camera','Use Match Day to select a connected camera.');$('status').textContent='OFFLINE';return;}
     if(!engine){empty(p.mode==='replay'?'Loading program replay':'Buffering delayed program','Waiting for decoded camera footage.');
-      if(p.mode==='live'){const token=outputToken;engine=new window.DRSBufferedBroadcast(p.camera_id,$('bufferedStage'),{onFrame:f=>{if(token===outputToken)frame(f);},onVideo:video=>{if(token===outputToken)meter.select?.(video);},onMute:()=>{if(token===outputToken)onMute();},onStatus:message=>{if(token===outputToken)$('status').textContent=(transition.holding?'SWITCHING · holding previous picture · ':'')+message;},onBuffering:()=>{if(token===outputToken)empty('Program buffering','Waiting for the next decoded clip. Check the camera recorder and network.');}});engine.hasAudio=false;}
+      if(p.mode==='live'){const token=outputToken;engine=new window.DRSBufferedBroadcast(p.camera_id,$('bufferedStage'),{onFrame:f=>{if(token===outputToken)frame(f);},onVideo:video=>{if(token===outputToken){meter.select?.(video);if(meterRequested)enableMeter().catch(()=>{});}},onRecovery:()=>{if(token===outputToken)meter.reset();},onMute:()=>{if(token===outputToken)onMute();},onStatus:message=>{if(token===outputToken)$('status').textContent=(transition.holding?'SWITCHING · holding previous picture · ':'')+message;},onBuffering:()=>{if(token===outputToken)empty('Program buffering','Waiting for the next decoded clip. Check the camera recorder and network.');}});engine.hasAudio=false;}
       else if(p.review.kind==='fielding_highlights'){const token=outputToken;engine=new window.CricketFieldingReel(p,$('bufferedStage'),{onFrame:f=>{if(token===outputToken)frame(f);},onAudioVideo:v=>{if(token===outputToken)meter.select?.(v);},onMute:()=>{if(token===outputToken)onMute();},onStatus:text=>{if(token===outputToken)$('status').textContent=text;}});}
       else {engine=new ReplayOutput(p,midpoint);engine.tick();}
       if(meterRequested)enableMeter().catch(()=>{});
@@ -64,12 +79,12 @@
   }
   let clock={server:Date.now(),local:performance.now()};
   function now(){return clock.server+performance.now()-clock.local;}
-  async function poll(){if(closed)return;const began=performance.now();try{const r=await fetch('/api/broadcast/program',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error('HTTP '+r.status);const data=await r.json();if(closed)return;const midpoint=(began+performance.now())/2;clock={server:data.server_ms,local:midpoint};apply(data,midpoint);}catch(e){if(!closed){programError=true;if(engine===reviewOutput)reviewOutput?.pauseForLinkLoss();$('status').textContent='Program control link lost · '+e.message;}}finally{if(!closed)pollTimer=setTimeout(poll,lastData?.drs?.follow_controller?150:750);}}
+  async function poll(){if(closed||suspended)return;const generation=visibilityGeneration,began=performance.now();try{const r=await fetch('/api/broadcast/program',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error('HTTP '+r.status);const data=await r.json();if(closed||suspended||generation!==visibilityGeneration)return;const midpoint=(began+performance.now())/2;clock={server:data.server_ms,local:midpoint};apply(data,midpoint);}catch(e){if(!closed&&!suspended&&generation===visibilityGeneration){programError=true;if(engine===reviewOutput)reviewOutput?.pauseForLinkLoss();$('status').textContent='Program control link lost · '+e.message;}}finally{if(!closed&&!suspended&&generation===visibilityGeneration)pollTimer=setTimeout(poll,lastData?.drs?.follow_controller?150:750);}}
   function report(){const h=engine?.healthSnapshot(now())||{},video=engine?.player?.active?.video,local=performance.now(),lastAge=h.last_frame_age_ms,decoded=video&&!video.hidden&&video.readyState>=2;
     const atEnd=state?.mode==='replay'&&engine?.target?.()>=state.review.end_ms-state.review.start_ms-1;
-    const playback=!engine?'offline':programError?'error':state.mode==='replay'&&(!state.playing||atEnd)&&decoded&&engine.player.ready&&!engine.player.waiting&&!engine.player.error?'paused':lastAge!==null&&lastAge!==undefined&&lastAge<750&&decoded?'playing':'buffering';
+    const playback=suspended?'paused':!engine?'offline':programError?'error':!livePreview&&state.mode==='replay'&&(!state.playing||atEnd)&&decoded&&engine.player.ready&&!engine.player.waiting&&!engine.player.error?'paused':lastAge!==null&&lastAge!==undefined&&lastAge<750&&decoded?'playing':'buffering';
     const sample=engine&&decoded?meter.sample(engine.audioVideo||video,engine.hasAudio):{meter_state:'unavailable',meter_dbfs:null};
-    const result={client_id:clientId,role,camera_id:state?.camera_id||'',revision:state?.revision||0,mode:state?.mode||'live',state:playback,...h,muted:muted(),audio_present:Boolean(engine?.hasAudio),...sample,graphics_kind:state?.mode==='replay'?'hidden':graphics.kind,graphics_surge:state?.mode==='live'&&!reviewAnnounced&&graphics.surge};
+    const result={client_id:clientId,role,camera_id:state?.camera_id||'',revision:state?.revision||0,mode:state?.mode||'live',state:playback,preview_suspended:suspended,preview_mode:livePreview?'live_camera':'program',...h,muted:muted(),audio_present:Boolean(engine?.hasAudio),...sample,graphics_kind:suspended||!livePreview&&state?.mode==='replay'?'hidden':graphics.kind,graphics_surge:!suspended&&(livePreview||state?.mode==='live')&&!reviewAnnounced&&graphics.surge};
     // A stopped/hidden player cannot leave a falsely active audio meter behind.
     if(playback!=='playing'){result.meter_state='unavailable';result.meter_dbfs=null;}
     if(blocked){result.meter_state='suspended';result.meter_dbfs=null;}
@@ -80,9 +95,12 @@
   async function sendReport(){if(closed)return;try{await fetch('/api/broadcast/health',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(report()),signal:AbortSignal.timeout(2000)});}catch{/* A missing heartbeat becomes stale at the desk; never mark it healthy locally. */}finally{if(!closed)reportTimer=setTimeout(sendReport,1000);}}
   async function command(body){try{const r=await fetch('/api/broadcast/program',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(5000)});const data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'Command rejected');if(!closed)apply(data,performance.now());}catch(e){$('status').textContent=e.message;}}
   $('camera').onchange=()=>command({action:'camera',camera_id:$('camera').value});$('controls').onsubmit=e=>e.preventDefault();$('retry').onclick=()=>command({action:'retry'});$('mute').onclick=()=>command({action:'audio',muted:!state?.muted});$('audioNotice').onclick=()=>{blocked=false;enableMeter().then(()=>{audioSettings();engine?.resume?.();});};
-  $('showGraphic').onchange=()=>{$('graphic').hidden=state?.mode==='replay'||!$('showGraphic').checked;};
+  $('showGraphic').onchange=()=>{$('graphic').hidden=!livePreview&&state?.mode==='replay'||!$('showGraphic').checked;};
   $('copyOutput').onclick=async()=>{const url=new URL(location.href);url.search='?follow=1&clean=1&client=obs&audio=1';try{await navigator.clipboard.writeText(url.href);$('copyOutput').textContent='Shared OBS link copied';}catch{$('status').textContent=url.href;}};
   window.addEventListener('message',e=>{if(e.source===$('graphic').contentWindow&&e.origin===location.origin&&e.data?.type==='broadcast-graphics-status'){graphics={kind:e.data.kind,surge:Boolean(e.data.surge)};}});
+  function previewVisibility(){if(role!=='preview'||closed)return;const next=!parentPreviewActive||document.hidden;if(next===suspended)return;suspended=next;visibilityGeneration++;clearTimeout(pollTimer);stop();key='';reviewOutput?.destroy();reviewOutput=null;lastData=null;$('graphic').contentWindow?.postMessage({type:'broadcast-suspend'},location.origin);if(suspended){empty('Preview paused','This local preview resumes when visible. OBS and the server keep running.');$('status').textContent='LOCAL PREVIEW PAUSED';}else{reviewOutput=createReviewOutput();poll();}}
+  document.addEventListener('visibilitychange',previewVisibility);
+  window.addEventListener('message',e=>{if(e.origin===location.origin&&e.source===window.parent&&window.parent!==window&&e.data?.type==='cricket-preview-visibility'){parentPreviewActive=e.data.active===true;previewVisibility();}});
   window.CricketProgram={enableMeter,health:report,reviewEvidence:()=>{const v=reviewOutput?.player?.active,s=reviewOutput?.session;return s&&v?{review_id:s.id,primary:s.primary,secondary:s.secondary||null,position_ms:v.clip.start_ms+v.video.currentTime*1000-reviewOutput.manifest.start_ms,playing:s.playing,speed:s.speed,zoom:JSON.parse(JSON.stringify(s.zoom)),follow_status:s.follow_status||null}:null;}};
   window.addEventListener('beforeunload',()=>{closed=true;clearTimeout(pollTimer);clearTimeout(reportTimer);stop();reviewOutput?.destroy();meter.close();});
   poll();sendReport();

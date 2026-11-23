@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const read=p=>fs.readFileSync(p,'utf8'),settle=async()=>{await new Promise(setImmediate);await new Promise(setImmediate);};
 const copy=v=>JSON.parse(JSON.stringify(v));
 function page(path,url){
-  const dom=new JSDOM(read(path),{url,runScripts:'outside-only'}),w=dom.window,timers=new Map();let id=0,elapsed=0;
+  const dom=new JSDOM(read(path),{url,runScripts:'outside-only',pretendToBeVisual:true}),w=dom.window,timers=new Map();let id=0,elapsed=0;
   w.AbortSignal.timeout=()=>undefined;w.performance.now=()=>elapsed;w.Date.now=()=>1000000+elapsed;
   w.setTimeout=(fn,ms)=>{timers.set(++id,{fn,ms});return id;};w.setInterval=(fn,ms)=>{timers.set(++id,{fn,ms,interval:true});return id;};
   w.clearTimeout=w.clearInterval=id=>timers.delete(id);
@@ -11,7 +11,7 @@ function page(path,url){
 }
 function payload(){return {server_ms:1000000,devices:[{device_id:'umpire',name:'Umpire',role:'UMPIRE_POV'},{device_id:'crease',name:'Crease',role:'OTHER'}],program:{revision:1,camera_id:'umpire',mode:'live',review_id:null,review:null,playing:true,position_ms:0,speed:1,anchor_ms:1000000,muted:false,retry_token:0}};}
 async function output(search='?follow=1&clean=1&client=obs&audio=1'){
-  const h=page('frontend/broadcast/index.html','https://local/broadcast'+search),{w,d}=h;let data=payload(),fail=false;const buffers=[],players=[],requests=[];
+  const h=page('frontend/broadcast/index.html','https://local/broadcast'+search),{w,d}=h;let data=payload(),fail=false;const buffers=[],players=[],requests=[],direct=[];
   w.DRS={createClientId:()=> 'client123456'};w.HTMLMediaElement.prototype.play=async function(){this._paused=false;};w.HTMLMediaElement.prototype.pause=function(){this._paused=true;};
   function video(v){v.hidden=false;v.currentTime=0;Object.defineProperty(v,'readyState',{get:()=>4});}
   class Buffered{
@@ -23,6 +23,7 @@ async function output(search='?follow=1&clean=1&client=obs&audio=1'){
     update(at,playing,speed,force){this.last={at,playing,speed,force};this.active.video.currentTime=(at-this.active.clip.start_ms)/1000;this.active.video.hidden=false;}retry(){}destroy(){this.closed=true;this.slots.forEach(s=>s.video.remove());}
   }
   w.DRSBufferedBroadcast=Buffered;w.DRSPlayback={AnglePlayer:Angle};w.eval(read('frontend/broadcast/program-health.js'));
+  w.DRSDirectPreview=class extends Buffered{constructor(...args){super(...args);buffers.pop();direct.push(this);Object.assign(this.h,{delay_seconds:null,available_seconds:null,headroom_seconds:null,target_delay_seconds:0});}};
   class Meter{
     constructor(){this.nodes=new Map();this.context=null;this.outputMuted=true;this.closed=false;}
     async start(videos){this.context={state:'running'};videos.forEach(v=>this.nodes.set(v,{}));return true;}mute(v){this.outputMuted=v;}
@@ -32,7 +33,7 @@ async function output(search='?follow=1&clean=1&client=obs&audio=1'){
   const meters=[];w.DRSProgramHealth.AudioMeter=class extends Meter{constructor(){super();meters.push(this);}};
   w.fetch=async(url,options={})=>{if(fail&&url==='/api/broadcast/program')throw Error('Offline');if(options.method==='POST'){const body=JSON.parse(options.body);requests.push({url,body});if(url.endsWith('/program')){data.program.revision++;if(body.action==='audio')data.program.muted=body.muted;if(body.action==='retry')data.program.retry_token++;}return {ok:true,json:async()=>copy(data)};}return {ok:true,json:async()=>copy(data)};};
   w.eval(read('frontend/broadcast/program-transition.js'));w.eval(read('frontend/broadcast/program-output.js'));await settle();
-  return {...h,buffers,players,meters,requests,data,setData(v){data=v;},setFail(v){fail=v;},health:()=>w.CricketProgram.health()};
+  return {...h,buffers,players,meters,requests,direct,data,setData(v){data=v;},setFail(v){fail=v;},health:()=>w.CricketProgram.health()};
 }
 test('shared output follows commands without restarting on each poll; selected offline source never substitutes',async()=>{
   const h=await output();try{
@@ -43,6 +44,20 @@ test('shared output follows commands without restarting on each poll; selected o
     h.data.devices.push({device_id:'crease',name:'Crease',role:'OTHER'});await h.tick(750);assert.equal(h.buffers.length,3);
     h.data.program.retry_token++;h.data.program.revision++;await h.tick(750);assert.equal(h.buffers[2].closed,true);assert.equal(h.buffers.length,4);
   }finally{h.close();}assert.equal(h.timers.size,0);
+});
+
+test('hidden preview releases its decoder and resumes from the current program; OBS never suspends',async()=>{
+ for(const role of ['preview','obs']){
+  const h=await output('?follow=1&clean=1&client='+role+'&audio=0');let hidden=false;
+  try{Object.defineProperty(h.d,'hidden',{get:()=>hidden,configurable:true});assert.equal(h.buffers.length,1);
+   hidden=true;h.d.dispatchEvent(new h.w.Event('visibilitychange'));
+   if(role==='preview'){assert.equal(h.buffers[0].closed,true);assert.equal(h.health().preview_suspended,true);assert.equal(h.health().state,'paused');await h.tick(750);assert.equal(h.buffers.length,1);h.data.program.camera_id='crease';h.data.program.revision++;}
+   else{assert.equal(h.buffers[0].closed,undefined);assert.equal(h.health().preview_suspended,false);}
+   hidden=false;h.d.dispatchEvent(new h.w.Event('visibilitychange'));await settle();
+   if(role==='preview'){assert.equal(h.buffers.length,2);assert.equal(h.buffers[1].id,'crease');assert.equal(h.health().preview_suspended,false);}
+   assert.equal(h.requests.filter(r=>r.url==='/api/broadcast/program').length,0,'local visibility must not issue global camera/playback commands');
+  }finally{h.close();}
+ }
 });
 test('camera change holds a real frame, suppresses buffering and fades only when the new frame arrives',async()=>{
  const h=await output();try{let drawn=null;h.w.HTMLCanvasElement.prototype.getContext=()=>({drawImage:v=>drawn=v});const old=h.buffers[0],v=old.player.active.video;Object.defineProperties(v,{videoWidth:{value:640},videoHeight:{value:360}});old.callbacks.onFrame({at:995000,delay:5,audio:false});
@@ -91,7 +106,8 @@ test('fixed broadcast URL leaves shared engine disabled',async()=>{
 });
 function score(){return {score:{source:'bluetooth',team1:'Test XI',runs:'44',wickets:'0',overs:'4.2',visible:true},last_score:995,server_time:1000,graphics:{innings:[{team:'Test XI'}],active:null,power_surge:false}};}
 function report(role='preview'){return {client_id:role+'-client123456',role,camera_id:'umpire',mode:'live',revision:1,state:'playing',report_age_ms:200,delay_seconds:5.2,available_seconds:42,headroom_seconds:1.2,last_frame_age_ms:100,dropped_frames:2,total_frames:900,late_clips:1,decode_errors:0,poll_errors:0,muted:role==='preview',meter_state:'active',meter_dbfs:-20,graphics_kind:'batting_card',graphics_surge:false};}
-async function desk(){const h=page('frontend/match-day/index.html','https://local/match-day'),data={program:payload(),score:score(),health:{server_ms:1000000,clients:[report()]}},requests=[];let fail=false;
+async function desk(saved){const h=page('frontend/match-day/index.html','https://local/match-day'),data={program:payload(),score:score(),health:{server_ms:1000000,clients:[report()]}},requests=[];let fail=false;
+  if(saved)h.w.localStorage.setItem('cricket.match-day.preview.v1',saved);
   h.w.fetch=async(url,options={})=>{if(fail)throw Error('Network offline');if(options.method==='POST'){requests.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>copy(data.program)};}const result=url==='/api/broadcast/program'?data.program:url==='/api/scoreboard/state'?data.score:url==='/api/broadcast/health'?data.health:{addresses:['https://192.168.1.68:8765']};return {ok:true,json:async()=>copy(result)};};
   h.w.eval(read('frontend/match-day/match-day.js'));await settle();return {...h,data,requests,setFail(v){fail=v;}};
 }
@@ -118,3 +134,28 @@ test('desk actions send scoped production commands and leave corrections/end-mat
 test('initial no-camera report is offline, not stuck applying a null source',async()=>{
   const h=await desk();try{h.data.program.program.camera_id=null;h.data.program.program.revision=0;Object.assign(h.data.health.clients[0],{camera_id:'',revision:0,state:'offline'});await h.tick(1000);assert.equal(h.d.getElementById('programTally').textContent,'NO CAMERA');assert.equal(h.d.getElementById('healthSummary').textContent,'LOCAL · OFFLINE');}finally{h.close();}
 });
+
+test('Match Day preview choice is local, persists and leaves the OBS URL and commands intact',async()=>{
+ const h=await desk();try{const picker=h.d.getElementById('previewMode'),frame=h.d.getElementById('programPreview'),obs=h.d.getElementById('sharedOutputUrl').textContent;
+  assert.equal(picker.value,'delayed');assert.ok(!frame.src.includes('delay=0'));picker.value='live';picker.dispatchEvent(new h.w.Event('change'));
+  assert.match(frame.src,/delay=0/);assert.match(frame.title,/Live camera/);assert.equal(h.w.localStorage.getItem('cricket.match-day.preview.v1'),'live');assert.equal(h.requests.length,0);assert.equal(h.d.getElementById('sharedOutputUrl').textContent,obs);
+  const source=frame.getAttribute('src');await h.tick(1000);assert.equal(frame.getAttribute('src'),source,'polls must not restart the preview');assert.match(h.d.getElementById('programTally').textContent,/ON AIR:/);
+  picker.value='delayed';picker.dispatchEvent(new h.w.Event('change'));assert.ok(!frame.src.includes('delay=0'));assert.equal(h.requests.length,0);
+ }finally{h.close();}
+ const saved=await desk('live');try{assert.equal(saved.d.getElementById('previewMode').value,'live');assert.match(saved.d.getElementById('programPreview').src,/delay=0/);}finally{saved.close();}
+ const invalid=await desk('bad');try{assert.equal(invalid.d.getElementById('previewMode').value,'delayed');}finally{invalid.close();}
+});
+
+test('direct preview follows camera changes, stays live during replay and releases while hidden',async()=>{
+ const h=await output('?follow=1&clean=1&client=preview&audio=0&delay=0');try{
+  assert.equal(h.buffers.length,0);assert.equal(h.direct.length,1);assert.equal(h.d.getElementById('graphic').getAttribute('src'),'/overlay');assert.equal(h.health().preview_mode,'live_camera');assert.equal(h.health().delay_seconds,null);assert.equal(h.health().muted,true);
+  h.direct[0].callbacks.onFrame({at:null,delay:null,audio:true});assert.match(h.d.getElementById('status').textContent,/LIVE CAMERA/);
+  Object.assign(h.data.program,{mode:'replay',playing:false,revision:2,review:{start_ms:980000,end_ms:990000,clips:[]}});await h.tick(750);assert.equal(h.direct.length,1);assert.equal(h.players.length,0);assert.equal(h.health().state,'playing');assert.equal(h.d.getElementById('replayBadge').hidden,true);assert.equal(h.d.getElementById('graphic').hidden,false);
+  h.data.program.camera_id='crease';h.data.program.revision++;await h.tick(750);assert.equal(h.direct[0].closed,true);assert.equal(h.direct[1].id,'crease');
+  Object.defineProperty(h.d,'hidden',{get:()=>true,configurable:true});h.d.dispatchEvent(new h.w.Event('visibilitychange'));assert.equal(h.direct[1].closed,true);assert.equal(h.health().preview_suspended,true);assert.equal(h.requests.filter(r=>r.url==='/api/broadcast/program').length,0);
+ }finally{h.close();}
+});
+
+test('zero-delay query on an OBS output cannot change its delayed program',async()=>{const h=await output('?follow=1&client=obs&audio=1&delay=0');try{assert.equal(h.buffers.length,1);assert.equal(h.direct.length,0);assert.equal(h.health().preview_mode,'program');}finally{h.close();}});
+
+test('health identifies a direct view without claiming measured zero latency or OBS playback',async()=>{const h=await desk();try{Object.assign(h.data.health.clients[0],{preview_mode:'live_camera',delay_seconds:null,target_delay_seconds:0,available_seconds:null,headroom_seconds:null});await h.tick(1000);assert.match(h.d.getElementById('healthSummary').textContent,/LOCAL LIVE CAMERA/);assert.equal(h.d.getElementById('healthDelay').textContent,'No added buffer · latency not measured');assert.match(h.d.getElementById('outputIdentity').textContent,/does not measure delayed/);}finally{h.close();}});

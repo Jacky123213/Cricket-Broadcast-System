@@ -22,8 +22,9 @@ DEFAULT_CONFIG = {
     "result_override": "", "powerplay_overs": 0, "power_surge_starts": {},
 }
 KINDS = {"run_chart", "batting_card", "bowling_card", "innings_break", "match_summary", "wicket_card", "power_surge",
-         "lineup", "player_batting", "player_bowling", "coming_up", "toss", "sponsor", "win"}
-PREMATCH_KINDS = {"lineup", "player_batting", "player_bowling", "coming_up", "toss", "sponsor"}
+         "lineup", "player_batting", "player_bowling", "coming_up", "toss", "sponsor", "win", "blank"}
+PREMATCH_KINDS = {"lineup", "player_batting", "player_bowling", "coming_up", "toss", "sponsor", "blank"}
+FOX_ONLY_KINDS = {"lineup", "player_batting", "player_bowling", "toss", "win"}
 
 
 def integer(value):
@@ -128,17 +129,20 @@ class BroadcastGraphics:
             self.phase = saved.get("phase", "live")
             self.finished_at = saved.get("finished_at")
             self.summary_shown = saved.get("summary_shown", False)
+            if saved.get('blank_overlay') is True:
+                self.show('blank',0)
 
     def export(self):
         return {"match_id":self.match_id,"config": self.config, "innings": self.innings, "phase": self.phase,
-                "finished_at": self.finished_at, "summary_shown": self.summary_shown}
+                "finished_at": self.finished_at, "summary_shown": self.summary_shown,
+                "blank_overlay": bool(self.active and self.active['kind']=='blank')}
 
     def configure(self, changes):
         validate_config(changes)
         proposed = {**self.config, **copy.deepcopy(changes)}
         validate_surge_ranges(proposed)
         self.config = proposed
-        if self.config['pack']=='bbl' and self.active and self.active['kind'] in PREMATCH_KINDS|{'win'}:
+        if self.config['pack']=='bbl' and self.active and self.active['kind'] in FOX_ONLY_KINDS:
             self.active = None
         self.next_strip_at = 0
         self.dirty = True
@@ -409,14 +413,16 @@ class BroadcastGraphics:
 
     def show(self, kind, now, reason="Manual", innings=None, team='', player=''):
         if kind not in KINDS: raise ValueError("Unknown graphic")
+        if reason != 'Manual' and self.active and self.active.get('until') is None: return
         index = len(self.innings) - 1 if innings is None else innings
         if kind not in PREMATCH_KINDS and (type(index) is not int or index < 0 or index >= len(self.innings)): raise ValueError("No innings statistics available yet")
-        if kind in PREMATCH_KINDS|{'win'} and self.config['pack']!='fox_odi': raise ValueError('Choose the FOX ODI preset for this graphic')
+        if kind in FOX_ONLY_KINDS and self.config['pack']!='fox_odi': raise ValueError('Choose the FOX ODI preset for this graphic')
         if kind=='win' and not self.result(): raise ValueError('Finish the match or enter its result first')
         if any(not isinstance(v,str) or len(v)>160 for v in (team,player)): raise ValueError('Invalid team or player')
         if kind == 'power_surge': self.power_surge = True; return
         if kind == 'wicket_card' and not self.innings[index]['last_wicket']: raise ValueError('Confirm a last-wicket batter first')
-        if reason != 'Manual' and self.active and self.active.get('until') is None: return
+        if kind in ('blank','coming_up','sponsor'): team, player = '', ''
+        if kind == 'blank': self.power_surge = False
         self.active = {"kind": kind, "innings": index, "reason": reason,
                        "until": None if reason == 'Manual' else now + self.config["graphic_seconds"]}
         if kind in PREMATCH_KINDS: self.active.update(team=team, player=player)

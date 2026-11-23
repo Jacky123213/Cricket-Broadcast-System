@@ -1,3 +1,36 @@
+# 1.12.0-rc.2 - live/delayed preview and accumulated updates
+
+- 234 Python checks pass in a clean full run; 160 JavaScript checks and all
+  three DOM smoke scripts pass. API/data tests include results/career records,
+  universal players, team identity, blank graphics and preview health isolation.
+- The Match Day preview uses actual WebRTC for no added delay and complete-file
+  buffered playback for delayed program. Ten native workflows with two synthetic
+  camera pages verify live reception, camera changes, live-through-replay,
+  delayed replay following, a separate delayed OBS-labelled browser, local-only
+  choice and responsive dark/light layouts at 1440, 1024 and 390 pixels.
+  Native decoded-pixel checks confirm a real synthetic picture after each resize.
+  Results: `.installer-test/match-preview-native-picture/results.json`.
+- Twenty-eight native graphics checks verify Home/Away labels, abbreviations,
+  neutral Coming Up, full-width sponsor images and complete blank output,
+  including watermark suppression/restoration. Results:
+  `.installer-test/graphics-controls-1120-final/results.json`.
+- Short Firefox and Edge static-picture pipelines recover from an intentional
+  download failure without healthy-file decode errors. A separate Firefox run
+  recovers from a corrupt file, ends around 8.1 seconds behind and has a maximum
+  advancing-picture gap of 1.204 seconds across that missing footage.
+- The final bundled executable passes native module loading, verified TLS routes
+  and WebSocket, host/connect isolation, hidden WebView2 rendering, graphics and
+  audience checks. Results: `.installer-test/frozen-1120-rc2/self-test-result.json`.
+- Windows version 1.12.0.2; installer 56,675,666 bytes.
+  SHA-256: `C4F8D2634556203B45962632692BC2DCCA7F9FAF2007D00EC2F6D063FF8D8DBA`.
+  Bundle privacy audit passes for 1,353 files and 189,041,050 bytes; application
+  keys, live match data and recordings are excluded. The matching source export
+  verifies every frontend file against the bundle and records Git-normalised hashes.
+- Tests use isolated data, synthetic video and local diagnostic certificates.
+  The installed app, real camera/microphone and trust store are not changed.
+  Full-match camera/iPad/OBS testing is still required. Prior installers remain
+  archived in `.installer-test/before-1120-rc2/` and earlier backup folders.
+
 # 1.10.0-rc.2 · delete saved teams
 
 - Added confirmed deletion of unused teams, including appearance, roster and

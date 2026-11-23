@@ -10,6 +10,7 @@ datas = [(str(root / "frontend"), "frontend"),
 datas.append((str(root / 'LIVE_MATCH_GUIDE.md'), '.'))
 datas.append((str(root / 'GRAPHICS_PACKS_GUIDE.md'), '.'))
 datas.append((str(root / 'OPERATOR_UI_GUIDE.md'), '.'))
+datas.append((str(root / 'STATISTICS_GUIDE.md'), '.'))
 binaries = []
 hiddenimports = ["uvicorn.logging", "uvicorn.loops.asyncio", "uvicorn.protocols.http.httptools_impl",
                  "uvicorn.protocols.websockets.websockets_impl", "uvicorn.lifespan.on",

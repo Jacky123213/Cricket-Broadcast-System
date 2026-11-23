@@ -100,7 +100,7 @@ async function useCamera(id) {
   if(bufferedMode){
     const connection={id,name:chosen.name,mediaRevision:chosen.settings?.media_revision||0,microphone:Boolean(chosen.settings?.microphone),hasAudio:false,showing:false};
     current=connection;video.hidden=true;
-    showEmpty('Buffering five-second broadcast','Keep the camera connected and its replay recorder running. Video, audio and graphics play together.');
+    showEmpty('Buffering delayed broadcast','Keep the camera connected and its replay recorder running. Video, audio and graphics play together.');
     status.textContent='BUFFERING · '+chosen.name;
     connection.buffered=new window.DRSBufferedBroadcast(id,document.querySelector('#bufferedStage'),{
       onStatus:message=>{if(current===connection)status.textContent=message;},

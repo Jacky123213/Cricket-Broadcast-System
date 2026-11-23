@@ -73,7 +73,7 @@ def check_desktop_window(settings) -> dict:
                             result.update(page)
                             break
                         time.sleep(.25)
-                    if result.get("views", 0) != 10 or "Cricket Broadcast System" not in result.get("title", ""):
+                    if result.get("views", 0) != 12 or "Cricket Broadcast System" not in result.get("title", ""):
                         raise RuntimeError(f"Desktop render did not become ready: {result}")
                     window.load_url(f"http://127.0.0.1:{port}/diagnostic-client")
                     deadline = time.monotonic() + 20
@@ -162,7 +162,12 @@ def run_self_test(settings) -> dict:
                           '/match-day-assets/pack-menu.js', '/broadcast-assets/fielding-reel.js', '/api/graphics-packs',
                           '/match-setup', '/teams', '/graphics', '/highlights', '/connections', '/settings', '/help', '/api/teams',
                           '/static/preferences.js', '/static/operator-nav.js', '/static/operator-layout.css',
-                          '/operator-assets/workspace.js', '/operator-assets/workspace.css', '/operator-assets/graphic-preview.html'):
+                          '/operator-assets/workspace.js', '/operator-assets/workspace.css', '/operator-assets/graphic-preview.html',
+                          '/stats', '/statistics', '/api/statistics', '/api/statistics/status',
+                          '/statistics-assets/statistics.js', '/statistics-assets/statistics.css', '/operator-assets/statistics.js',
+                          '/static/results-review.js', '/static/results-review.css', '/static/preview-visibility.js', '/live-assets/live-layout.css',
+                          '/static/image-upload-help.js', '/broadcast-assets/live-clip-cache.js', '/broadcast-assets/buffered-broadcast.js',
+                          '/broadcast-assets/direct-preview.js'):
                 with urllib.request.urlopen(f"https://127.0.0.1:{port}{route}", context=context, timeout=5) as response:
                     content = response.read()
                     assert response.status == 200 and content, route

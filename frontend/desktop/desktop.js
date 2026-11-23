@@ -1,5 +1,8 @@
 'use strict';
 const views=[...document.querySelectorAll('.view')],byId=id=>document.getElementById(id),rail=byId('desktopRail');
+function notifyViewVisibility(){if(!document?.body)return;for(const view of views){const frame=view.querySelector('iframe');if(frame?.getAttribute('src')&&frame.getAttribute('src')!=='about:blank')frame.contentWindow?.postMessage({type:'cricket-page-visibility',active:view.classList.contains('active')&&!document.hidden},location.origin);}}
+for(const view of views){new MutationObserver(notifyViewVisibility).observe(view,{attributes:true,attributeFilter:['class']});view.querySelector('iframe')?.addEventListener('load',notifyViewVisibility);}
+document.addEventListener('visibilitychange',notifyViewVisibility);
 let studioConnection={name:'Studio PC',client:false,local_operator:false};try{studioConnection=JSON.parse(byId('studioConnection')?.textContent||'{}');}catch{}
 window.CricketNavigation.render(rail,'match-day',true);
 rail.insertAdjacentHTML('beforeend','<div class="local-live-control"><label><input id="localLiveViews" type="checkbox" checked> Live views on this screen</label><p>Off frees this PC’s previews. Your iPad and OBS stay connected.</p></div><div class="studio-connection"><span id="studioMode"></span><strong id="studioName"></strong><small id="studioAddress"></small></div><div class="rail-status"><i id="serverDot"></i><span id="serverText">Connecting…</span></div><span id="diagServer" hidden></span>');

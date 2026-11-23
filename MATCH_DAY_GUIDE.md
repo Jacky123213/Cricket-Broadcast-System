@@ -21,15 +21,39 @@ Old fixed-camera `/broadcast?camera=…` URLs continue independently. They do no
 ## Production controls
 
 - **Take program camera** cuts every shared-program output to that source. An offline selected camera stays selected; it is not silently replaced by another angle.
-- **Return to live** plays the delayed native video/audio feed, targeting five seconds behind. Actual delay is measured from the displayed frame, not assumed from that setting.
+- **Return to live** plays the delayed native video/audio feed, targeting eight seconds behind, adapting up to ten seconds when needed. Actual delay is measured from the displayed frame, not assumed from that setting.
 - **Replay last 10 / 30 / 60 s** uses already-reached delayed footage, with pause, seek, 0.25× / 0.5× / 1× and angle selection. An incomplete window can contain visible unavailable sections; no frames are invented. The replay end holds until you explicitly return to live or press Play to restart it. Replay is labelled and live score graphics are hidden during replay.
-- Graphic requests are shared with the scoreboard controls. Timestamp-matched graphics normally reach the delayed program about five seconds after the request. Manual graphics stay until **Reopen scoreboard** or another manual graphic. Power Surge remains independent and hides during large graphics.
+- Graphic requests are shared with the scoreboard controls. Timestamp-matched graphics normally reach the delayed program at the displayed video timestamp, normally 8–10 seconds after the request. Manual graphics stay until **Reopen scoreboard** or another manual graphic. Power Surge remains independent and hides during large graphics.
 - **Mute program audio** affects shared outputs. The local preview is always silent, even when its meter is enabled. It is not another audible OBS capture source.
 - **Retry shared output** rebuilds every shared player's decoder; expect a startup/loading period and session-counter reset. Use it for recovery, not routine camera operation.
 
 Program/replay commands and player reports are session-only. Server restart returns to live, chooses an initial camera again and discards program replay control state. Match data, colours, logos and scoring history remain in their normal private files. Existing replay quota/storage limits still apply; close unneeded detailed reviews if a new replay is refused.
 
 ## Read the health panel accurately
+
+Above the monitor, **Preview view** chooses **Delayed program (8–10 s)** or
+**Live camera (no added delay)**. The browser remembers its choice. Delayed shows
+the on-air program, including replay and review; Live stays on the selected
+camera's current picture while those run. This choice changes only this screen,
+keeps the preview silent and leaves OBS delayed. Camera/network latency still
+exists; no added buffer does not mean measured zero latency. Live camera health
+is labelled separately and cannot set a replay's on-air end timestamp.
+
+Live playback downloads whole clip files into a bounded local cache before
+decoding. It starts at an eight-second target, extending to ten seconds during
+stalls without rewinding the picture. Startup waits for recorded footage;
+failed downloads retry and stalled decoders recover automatically. The last
+picture may be held briefly during recovery; it is never counted as a new frame.
+Actual delay can exceed the target during a longer capture/network failure.
+
+Firefox video-only recording adds a private silent audio timing track for static
+sources. It does not open the microphone and is reported as no camera audio.
+Camera microphone sound is still recorded together with its video when enabled.
+
+Health JSON adds `target_delay_seconds`, `cached_seconds`, `clip_download_ms`,
+`download_errors`, `recovery_attempts`, `last_download_error` and
+`last_decode_error`. Hover the footage/request readings for local-cache and
+download details. Historical errors remain available after playback recovers.
 
 **Monitor output** selects a reporting browser. The desk prefers a report labelled OBS by the shared URL; select the correct client if several are open. This is a browser self-report, not an OBS mixer/recorder API connection.
 

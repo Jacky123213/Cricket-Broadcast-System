@@ -3,19 +3,24 @@
   'use strict';
   function intervals(clips){const result=[];for(const clip of [...clips].sort((a,b)=>a.start_ms-b.start_ms)){const a=clip.start_ms,b=clip.end_ms;if(b<=a)continue;if(result.length&&a<=result.at(-1)[1])result.at(-1)[1]=Math.max(b,result.at(-1)[1]);else result.push([a,b]);}return result;}
   class PlaybackHealth {
-    constructor(){this.seen=null;this.quality=new WeakMap();this.failures=new Map();this.late=0;this.decode=0;this.poll=0;this.dropped=null;this.total=null;this.frameAt=null;this.frameLocal=null;this.available=null;}
+    constructor(){this.seen=null;this.quality=new WeakMap();this.failures=new Map();this.late=0;this.decode=0;this.poll=0;this.dropped=null;this.total=null;this.preloadDropped=null;this.preloadTotal=null;this.frameAt=null;this.frameLocal=null;this.available=null;}
     ingest(clips,now,delay){const ids=new Set(clips.map(c=>c.id));if(this.seen)for(const c of clips)if(!this.seen.has(c.id)&&c.end_ms<=now-delay)this.late++;this.seen=ids;}
     frame(at,video,local=performance.now()){
       this.frameAt=at;this.frameLocal=local;
       try{const q=video?.getVideoPlaybackQuality?.();if(!q||!Number.isInteger(q.droppedVideoFrames)||!Number.isInteger(q.totalVideoFrames)||q.droppedVideoFrames<0||q.totalVideoFrames<0)return;
-        const source=video.currentSrc||video.src||'',old=this.quality.get(video)||{dropped:0,total:0,source},reset=old.source!==source||q.totalVideoFrames<old.total||q.droppedVideoFrames<old.dropped;
-        this.dropped=(this.dropped||0)+(reset?q.droppedVideoFrames:q.droppedVideoFrames-old.dropped);this.total=(this.total||0)+(reset?q.totalVideoFrames:q.totalVideoFrames-old.total);this.quality.set(video,{dropped:q.droppedVideoFrames,total:q.totalVideoFrames,source});
+        const source=video.currentSrc||video.src||'',old=this.quality.get(video),reset=!old||old.source!==source||q.totalVideoFrames<old.total||q.droppedVideoFrames<old.dropped;
+        // Native counters include seeks and hidden standby decoding. Keep those
+        // measurements separate from deltas while this decoder is on air.
+        this.dropped??=0;this.total??=0;this.preloadDropped??=0;this.preloadTotal??=0;
+        if(reset){this.preloadDropped+=q.droppedVideoFrames;this.preloadTotal+=q.totalVideoFrames;}
+        else{this.dropped+=q.droppedVideoFrames-old.dropped;this.total+=q.totalVideoFrames-old.total;}
+        this.quality.set(video,{dropped:q.droppedVideoFrames,total:q.totalVideoFrames,source});
       }catch{/* Unsupported frame statistics remain unavailable, never guessed zero. */}
     }
     errors(player){for(const [id,until] of player.failures||[]){if(this.failures.get(id)!==until){this.decode++;this.failures.set(id,until);}}}
     snapshot(clips,now,local=performance.now()){
       const spans=intervals(clips),at=this.frameAt,span=at===null?null:spans.find(([a,b])=>a<=at&&at<=b);
-      return {delay_seconds:at===null?null:Math.max(0,(now-at)/1000),available_seconds:this.available??spans.reduce((sum,[a,b])=>sum+(b-a)/1000,0),headroom_seconds:span?Math.max(0,(span[1]-at)/1000):null,last_frame_age_ms:this.frameLocal===null?null:Math.max(0,local-this.frameLocal),dropped_frames:this.dropped,total_frames:this.total,late_clips:this.late,decode_errors:this.decode,poll_errors:this.poll};
+      return {delay_seconds:at===null?null:Math.max(0,(now-at)/1000),available_seconds:this.available??spans.reduce((sum,[a,b])=>sum+(b-a)/1000,0),headroom_seconds:span?Math.max(0,(span[1]-at)/1000):null,last_frame_age_ms:this.frameLocal===null?null:Math.max(0,local-this.frameLocal),dropped_frames:this.dropped,total_frames:this.total,preload_dropped_frames:this.preloadDropped,preload_total_frames:this.preloadTotal,late_clips:this.late,decode_errors:this.decode,poll_errors:this.poll};
     }
   }
   class AudioMeter {

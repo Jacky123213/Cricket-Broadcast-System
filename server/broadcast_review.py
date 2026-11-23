@@ -224,7 +224,7 @@ class BroadcastReview:
                 clips = [c for c in self.desk.replay.clips.values() if c['device_id'] in ids and c['end_ms']>at-15000]
                 if any(not any(c['device_id']==id for c in clips) for id in ids):
                     raise HTTPException(409, 'Each selected angle needs recent recorded footage')
-                end = min(at-5000, *(max(c['end_ms'] for c in clips if c['device_id']==id)-1 for id in ids))
+                end = min(self.desk.live_playout_end(at), *(max(c['end_ms'] for c in clips if c['device_id']==id)-1 for id in ids))
                 start = end-cmd.seconds*1000
                 clips = [c for c in self.desk.replay.clips.values()
                          if c['device_id'] in ids and c['end_ms']>start and c['start_ms']<end]

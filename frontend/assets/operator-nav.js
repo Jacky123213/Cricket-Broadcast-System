@@ -2,8 +2,8 @@
 window.CricketNavigation = (() => {
   'use strict';
   const groups = [
-    ['LIVE', [['match-day','Match Day','/match-day','monitor'],['replay','Replay Studio','/umpire','film'],['scoreboard','Scoreboard','/scoreboard','score']]],
-    ['PREPARE', [['match-setup','Match Setup','/match-setup','calendar'],['teams','Teams & Players','/teams','people']]],
+    ['LIVE', [['match-day','Match Day','/match-day','monitor'],['replay','Replay Studio','/umpire','film'],['scoreboard','Scoreboard','/scoreboard','score'],['live-match','Live Match','/live#scorecard','score']]],
+    ['PREPARE', [['match-setup','Match Setup','/match-setup','calendar'],['teams','Teams & Players','/teams','people'],['statistics','Statistics','/statistics','people']]],
     ['BROADCAST', [['graphics','Graphics','/graphics','layers'],['highlights','Highlights','/highlights','play']]],
     ['SYSTEM', [['connections','Connections','/connections','plug'],['settings','Settings','/settings','settings'],['help','Help','/help','help']]]
   ];
@@ -14,6 +14,11 @@ window.CricketNavigation = (() => {
     host.innerHTML = `<a class="operator-brand" href="${desktop ? '#match-day' : '/match-day'}"><span>BC</span><strong>Cricket<br>Broadcast System</strong></a><nav aria-label="Application sections">${groups.map(([label, rows]) => `<div class="nav-group"><span>${label}</span>${rows.map(([id,text,url,img]) => `<${desktop ? 'button type="button"' : 'a href="'+url+'"'} class="nav${id===active?' active':''}" data-view="${id}"${id===active?' aria-current="page"':''}>${icon(img)}<span>${text}</span></${desktop?'button':'a'}>`).join('')}</div>`).join('')}</nav>`;
   }
   function standalone() {
+    if(document.body.hasAttribute('data-operator')){const visibility=document.createElement('script');visibility.src='/static/preview-visibility.js';document.body.append(visibility);}
+    if(window.top===window&&(document.body.classList.contains('desktop-ui')||document.body.hasAttribute('data-operator'))){
+      const css=document.createElement('link');css.rel='stylesheet';css.href='/static/results-review.css';document.head.append(css);
+      const script=document.createElement('script');script.src='/static/results-review.js';document.body.append(script);
+    }
     if (window.top !== window || document.body.classList.contains('desktop-ui') || document.body.classList.contains('broadcast-ui') || !document.body.hasAttribute('data-operator')) return;
     const rail = document.createElement('aside'); render(rail, document.body.dataset.operator); document.body.prepend(rail); document.body.classList.add('standalone-operator');
     const menu = document.createElement('button'); menu.type='button'; menu.className='operator-menu'; menu.textContent='Menu'; menu.setAttribute('aria-expanded','false'); menu.setAttribute('aria-label','Open application sections'); menu.onclick=()=>{const open=document.body.classList.toggle('nav-open');menu.setAttribute('aria-expanded',String(open));}; document.body.prepend(menu);
